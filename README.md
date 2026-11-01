@@ -4,6 +4,8 @@
 
 OmpChat does not run models itself and does not talk directly to Ollama. It talks to a small bridge on the PC that drives `omp --mode rpc` in your project folders and streams responses to the phone.
 
+> **Note:** This project is a work in progress. It is already stable for daily use, but some features (like voice) are still being finalized. See the [Version History](#version-history) for details.
+
 [![Version](https://img.shields.io/badge/version-2.9.46-blue)](https://github.com/megaxenon83-server/OmpChat/releases)
 [![Platform](https://img.shields.io/badge/platform-Android%207.0%2B-green)](https://github.com/megaxenon83-server/OmpChat/releases)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
@@ -44,12 +46,11 @@ OmpChat does not run models itself and does not talk directly to Ollama. It talk
 - Automatic reconnection on app foreground
 - Multiple endpoints learned from `/api/ping` hosts
 
-### Voice
-- Speech-to-text (STT) with multiple engine support
-- Text-to-speech (TTS) with voice selection
-- Full-duplex voice conversation mode
-- Voice speed, barge-in, and auto-listen settings
-- Hands-free mode
+### Voice (Work in Progress)
+- Speech-to-text (STT) code present, not yet fully implemented
+- Text-to-speech (TTS) code present, not yet fully implemented
+- Voice conversation mode code present, pending final integration
+- Voice settings UI is available but features are disabled until implementation is complete
 
 ### UI / UX
 - Dark and light themes with dynamic color
