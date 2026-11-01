@@ -12,15 +12,61 @@ OmpChat does not run models itself and does not talk directly to Ollama. It talk
 
 ## Features
 
-- **Chat with OMP** — full conversation with tools, approvals, and streaming
-- **Terminal** — xterm.js-based terminal via WebViewAssetLoader (no CDN)
-- **Multi-PC** — support for multiple PCs with separate profiles and tokens
-- **LAN + Tailscale** — automatic failover between LAN and Tailscale addresses
-- **QR pairing** — scan QR code from PC for quick connection
-- **Premium UI** — dark/light theme, token indicator, activity view
-- **Voice** — speech-to-text and text-to-speech
-- **Wake-on-LAN** — wake up the PC from your phone
-- **Gotify** — push notifications for completed tasks
+### Chat
+- Full conversation with OMP — tools, approvals, streaming responses
+- Send text, images, and files as attachments
+- Regenerate, edit, and resend messages
+- Auto-generated conversation titles
+- Project-based conversation filtering
+- Favorites and archived sessions
+- Markdown rendering with syntax highlighting
+
+### Terminal
+- xterm.js-based terminal via WebViewAssetLoader (no CDN, no HTTP server)
+- Local assets only — works fully offline
+- PTY integration with the PC shell
+- Multiple terminal tabs per PC
+- Keyboard handling (backspace, CTRL, ALT, etc.)
+
+### Multi-PC
+- Register and switch between multiple PCs
+- Separate profiles and tokens per PC (stored in Android Keystore)
+- LAN + Tailscale addresses per PC
+- Automatic failover between LAN and Tailscale
+- Wake-on-LAN support (local broadcast or Docker over SSH)
+- PC status tracking (online/offline/starting)
+
+### Connection
+- QR code pairing (`/ompqr` in OMP)
+- Automatic LAN → Tailscale failover
+- Token stored securely in Android Keystore (AES/GCM)
+- Connection verification (ping + health + auth)
+- Automatic reconnection on app foreground
+- Multiple endpoints learned from `/api/ping` hosts
+
+### Voice
+- Speech-to-text (STT) with multiple engine support
+- Text-to-speech (TTS) with voice selection
+- Full-duplex voice conversation mode
+- Voice speed, barge-in, and auto-listen settings
+- Hands-free mode
+
+### UI / UX
+- Dark and light themes with dynamic color
+- Adjustable font scale
+- Norwegian and English language support
+- Token usage indicator (inline, discreet)
+- Activity cards for tool calls and agent actions
+- Collapsible tool call cards
+- Responsive layout (phone + tablet)
+
+### Other
+- Gotify push notifications (task done, failed, approval, etc.)
+- File manager (browse, upload, download)
+- Git integration (status, diff, commit)
+- Task tracking and todo management
+- Settings export/import
+- Crash reporting
 
 ## Architecture
 
@@ -57,9 +103,11 @@ Download `OmpChat-2.9.46.apk` from [Releases](https://github.com/megaxenon83-ser
 
 ### 3. Connect
 
-1. Run `/ompqr` in OMP to generate a QR code
-2. Open the OmpChat app → scan the QR code
-3. The app connects to the Bridge automatically
+1. Kjør `/ompqr` i OMP for å generere QR-kode
+2. Åpne OmpChat-appen → skann QR-koden
+3. Appen kobler seg automatisk til Bridge
+
+> **Autostart-tips:** Hvis Bridge ikke starter automatisk ved Windows-oppstart, kjør `/ompserver` i OMP først, og deretter `/ompqr` for å generere ny QR-kode.
 
 ## Building
 
@@ -121,6 +169,8 @@ OmpChat/
 | "Token rejected" | Re-pair via QR code (`/ompqr` in OMP) |
 | Port 7777 blocked | Check firewall (TCP 7777) |
 | App crashes | Check logcat for stack trace |
+| Bridge doesn't auto-start at boot | Run `/ompserver` in OMP first, then `/ompqr` |
+| Multiple PCs not connecting | Delete old PC profiles in app, re-pair each PC |
 
 ## Version History
 
