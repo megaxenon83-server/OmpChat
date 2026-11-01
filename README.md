@@ -175,6 +175,15 @@ OmpChat/
 | Bridge doesn't auto-start at boot | Run `/ompserver` in OMP first, then `/ompqr` |
 | Multiple PCs not connecting | Delete old PC profiles in app, re-pair each PC |
 
+## Known Limitations
+
+- **Voice** — Code is present but not yet fully implemented. UI is available but features are disabled.
+- **Linux Flatpak** — Not tested. Provided as-is, may require adjustments.
+- **Terminal** — Works in emulator; physical device keyboard behavior may vary.
+- **QR scanning** — Requires camera permission; may not work on all devices.
+- **Tailscale** — Not testable in emulator; requires physical device on same Tailnet.
+- **Multi-PC switching** — Tested in emulator only; physical device testing pending.
+
 ## Version History
 
 See [CHANGELOG.md](CHANGELOG.md) for full version history.
