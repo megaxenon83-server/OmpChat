@@ -61,8 +61,12 @@ OmpChat does not run models itself and does not talk directly to Ollama. It talk
 - Collapsible tool call cards
 - Responsive layout (phone + tablet)
 
-### Other
-- Gotify push notifications (task done, failed, approval, etc.)
+### PC Resource Monitor (New)
+- Discreet CPU/RAM/GPU usage indicator in chat header
+- Tap to see detailed breakdown with color coding
+- Supports NVIDIA, AMD, and Intel GPUs
+- Polls every 30 seconds (opt-in via settings)
+- Color coding: green (< 60%), orange (60-85%), red (> 85%)
 - File manager (browse, upload, download)
 - Git integration (status, diff, commit)
 - Task tracking and todo management
