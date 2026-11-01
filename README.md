@@ -1,8 +1,8 @@
 # OmpChat
 
-**Mobilklient for Oh My Pi (OMP) AI-agenten på PC-en din.**
+**Mobile client for the Oh My Pi (OMP) AI agent on your PC.**
 
-OmpChat kjører ikke modeller selv og snakker ikke direkte med Ollama. Den snakker med en liten bridge på PC-en som driver `omp --mode rpc` i prosjektmappene dine og strømmer svarene til telefonen.
+OmpChat does not run models itself and does not talk directly to Ollama. It talks to a small bridge on the PC that drives `omp --mode rpc` in your project folders and streams responses to the phone.
 
 [![Version](https://img.shields.io/badge/version-2.9.46-blue)](https://github.com/megaxenon83-server/OmpChat/releases)
 [![Platform](https://img.shields.io/badge/platform-Android%207.0%2B-green)](https://github.com/megaxenon83-server/OmpChat/releases)
@@ -10,60 +10,60 @@ OmpChat kjører ikke modeller selv og snakker ikke direkte med Ollama. Den snakk
 
 ---
 
-## Funksjoner
+## Features
 
-- **Chat med OMP** — full samtale med verktøy, godkjenninger og streaming
-- **Terminal** — xterm.js-basert terminal via WebViewAssetLoader (ingen CDN)
-- **Multi-PC** — støtte for flere PC-er med separate profiler og tokens
-- **LAN + Tailscale** — automatisk failover mellom LAN og Tailscale-adresser
-- **QR-pairing** — skann QR-kode fra PC for rask tilkobling
-- **Premium UI** — mørkt/lyst tema, token-indikator, aktivitetsvisning
-- **Voice** — tale-til-tekst og tekst-til-tale
-- **Wake-on-LAN** — vekk PC-en fra telefonen
-- **Gotify** — push-varsler ved ferdige oppgaver
+- **Chat with OMP** — full conversation with tools, approvals, and streaming
+- **Terminal** — xterm.js-based terminal via WebViewAssetLoader (no CDN)
+- **Multi-PC** — support for multiple PCs with separate profiles and tokens
+- **LAN + Tailscale** — automatic failover between LAN and Tailscale addresses
+- **QR pairing** — scan QR code from PC for quick connection
+- **Premium UI** — dark/light theme, token indicator, activity view
+- **Voice** — speech-to-text and text-to-speech
+- **Wake-on-LAN** — wake up the PC from your phone
+- **Gotify** — push notifications for completed tasks
 
-## Arkitektur
+## Architecture
 
 ```
-Telefon (Compose)  →  HTTP + SSE  →  bridge/omp-bridge.mjs  →  NDJSON  →  omp --mode rpc
+Phone (Compose)  →  HTTP + SSE  →  bridge/omp-bridge.mjs  →  NDJSON  →  omp --mode rpc
        ↕                                    ↕                              ↕
-  Keystore (token)                    config.json                   prosjektmappe
+  Keystore (token)                    config.json                   project folder
 ```
 
-- `bridge/omp-bridge.mjs` starter én OMP-prosess per prosjektmappe (maks 4, inaktive avvikles)
-- Eksponerer REST + SSE med bearer-token
-- Appen eier ingen samtaler — historikk, titler og verktøykall kommer fra OMP
-- Godkjenninger fra OMP sendes til appen som ark med Godkjenn / Godkjenn skriving / Avslå
+- `bridge/omp-bridge.mjs` starts one OMP process per project folder (max 4, inactive ones are terminated)
+- Exposes REST + SSE with bearer token
+- The app owns no conversations — history, titles, and tool calls come from OMP
+- Approvals from OMP are sent to the app as sheets with Approve / Approve writing for this session / Reject
 
-## Kom i gang
+## Getting Started
 
-### 1. Installer Bridge på PC-en
+### 1. Install Bridge on the PC
 
 **Windows:**
 ```powershell
-# Last ned og kjør NimayOMP-Installer-3.2.0.exe
-# Installerer Bridge, OMP-kommandoer, brannmurregel og auto-start
+# Download and run NimayOMP-Installer-3.2.0.exe
+# Installs Bridge, OMP commands, firewall rule, and auto-start
 ```
 
 **Linux:**
 ```bash
-# Installer Flatpak-pakken
+# Install Flatpak package
 flatpak install net.nimay.ompbridge.flatpak
 ```
 
-### 2. Installer appen på telefonen
+### 2. Install the app on your phone
 
-Last ned `OmpChat-2.9.46.apk` fra [Releases](https://github.com/megaxenon83-server/OmpChat/releases) og installer.
+Download `OmpChat-2.9.46.apk` from [Releases](https://github.com/megaxenon83-server/OmpChat/releases) and install.
 
-### 3. Koble til
+### 3. Connect
 
-1. Kjør `/ompqr` i OMP for å generere QR-kode
-2. Åpne OmpChat-appen → skann QR-koden
-3. Appen kobler seg automatisk til Bridge
+1. Run `/ompqr` in OMP to generate a QR code
+2. Open the OmpChat app → scan the QR code
+3. The app connects to the Bridge automatically
 
-## Bygging
+## Building
 
-### Android-app
+### Android app
 
 ```bash
 # Debug
@@ -72,68 +72,68 @@ Last ned `OmpChat-2.9.46.apk` fra [Releases](https://github.com/megaxenon83-serv
 # Release
 ./gradlew assembleRelease
 
-# Tester
+# Tests
 ./gradlew testDebugUnitTest
 ```
 
-**Krav:** Android SDK 34, Kotlin 2.0, JDK 17
+**Requirements:** Android SDK 34, Kotlin 2.0, JDK 17
 
-### Windows-installer
+### Windows installer
 
 ```powershell
-# Bygg med Inno Setup
+# Build with Inno Setup
 iscc NimayOMP-Installer.iss
 ```
 
-**Krav:** Inno Setup 6.x, PowerShell 5.1+
+**Requirements:** Inno Setup 6.x, PowerShell 5.1+
 
-## Prosjektstruktur
+## Project Structure
 
 ```
 OmpChat/
-├── app/                    # Android-app (Kotlin/Compose)
-│   ├── src/main/java/      # Kildekode
-│   ├── src/main/assets/    # Terminal (xterm.js, lokal)
-│   └── src/test/           # Unit-tester
+├── app/                    # Android app (Kotlin/Compose)
+│   ├── src/main/java/      # Source code
+│   ├── src/main/assets/    # Terminal (xterm.js, local)
+│   └── src/test/           # Unit tests
 ├── bridge/                 # Node.js bridge (runtime)
 ├── installer/              # Windows installer (Inno Setup)
-├── omp-commands/           # OMP-kommandoer (/ompserver, /ompqr)
+├── omp-commands/           # OMP commands (/ompserver, /ompqr)
 ├── scripts/                # Linux service scripts
-├── tools/                  # Hjelpeverktøy
+├── tools/                  # Helper tools
 ├── wol-service/            # Wake-on-LAN (Docker)
 ├── .github/                # GitHub Actions
-└── docs/                   # Dokumentasjon
+└── docs/                   # Documentation
 ```
 
-## Sikkerhet
+## Security
 
-- Token lagres i Android Keystore (AES/GCM) per PC-profil
-- Bridge krever bearer-token for alle endepunkter
-- `/api/ping` er offentlig (for tilgjengelighetssjekk)
-- `/api/health` krever gyldig token
-- Ingen passord eller tokens i klartekst i app eller config
+- Token stored in Android Keystore (AES/GCM) per PC profile
+- Bridge requires bearer token for all endpoints
+- `/api/ping` is public (for availability check)
+- `/api/health` requires valid token
+- No passwords or tokens in plaintext in app or config
 
-## Feilsøking
+## Troubleshooting
 
-| Problem | Løsning |
-|---------|---------|
-| "Kan ikke koble til" | Sjekk at Bridge kjører (`/ompserver` i OMP) |
-| "Token avvist" | Re-pair via QR-kode (`/ompqr` i OMP) |
-| Port 7777 blokkert | Sjekk brannmur (TCP 7777) |
-| App krasjer | Sjekk logcat for stack trace |
+| Problem | Solution |
+|---------|----------|
+| "Cannot connect" | Check that Bridge is running (`/ompserver` in OMP) |
+| "Token rejected" | Re-pair via QR code (`/ompqr` in OMP) |
+| Port 7777 blocked | Check firewall (TCP 7777) |
+| App crashes | Check logcat for stack trace |
 
-## Versjonshistorikk
+## Version History
 
-Se [CHANGELOG.md](CHANGELOG.md) for full versjonshistorikk.
+See [CHANGELOG.md](CHANGELOG.md) for full version history.
 
-## Lisens
+## License
 
-MIT License — se [LICENSE](LICENSE) for detaljer.
+MIT License — see [LICENSE](LICENSE) for details.
 
-## Bidrag
+## Contributing
 
-1. Fork repoet
-2. Opprett en branch (`git checkout -b feature/min-funksjon`)
-3. Commit endringer (`git commit -m "Legg til min funksjon"`)
-4. Push (`git push origin feature/min-funksjon`)
-5. Opprett Pull Request
+1. Fork the repository
+2. Create a branch (`git checkout -b feature/my-feature`)
+3. Commit changes (`git commit -m "Add my feature"`)
+4. Push (`git push origin feature/my-feature`)
+5. Open a Pull Request
