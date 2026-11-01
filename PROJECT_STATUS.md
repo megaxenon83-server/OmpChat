@@ -927,3 +927,13 @@ This caused ArrayIndexOutOfBoundsException: src.length=64 srcPos=12 dst.length=7
 - pp/build.gradle — versionCode 71, versionName 2.9.46
 
 **APK:** OmpChat-2.9.46 (code 71), SHA-256 40631FBF3253E7183F06222E2AEB326743FEE5D9D6A3C9DBB913E4E09281523F
+
+
+## Cleanup completed (2026-11-01)
+
+- Removed old C:\Program Files\Nimay OMP\ (v2.5 installation) with admin rights
+- Removed old Startup shortcut (was already disabled as .lnk.disabled)
+- Consolidated 3 backup folders (1.7 GB) to C:\RELEASE\NIMAYOMPCHAT\backup\
+- Added "Known Limitations" section to README.md
+- Marked Linux Flatpak as untested in README.md
+- Published to GitHub: https://github.com/megaxenon83-server/OmpChat
