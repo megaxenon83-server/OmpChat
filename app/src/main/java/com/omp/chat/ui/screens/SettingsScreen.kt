@@ -111,7 +111,8 @@ fun SettingsScreen(
     onLoadVoiceEngines: () -> Unit = {},
     onGotifySave: (Boolean, String, String) -> Unit = { _, _, _ -> },
     onGotifyTest: () -> Boolean = { false },
-    onOpenGotify: () -> Unit = {}
+    onOpenGotify: () -> Unit = {},
+    onResourceMonitorEnabled: (Boolean) -> Unit = {}
 ) {
     val strings = LocalStrings.current
     val scope = rememberCoroutineScope()
@@ -339,7 +340,8 @@ fun SettingsScreen(
                     TextButton(onClick = { onOpenGotify() }) { Text("Konfigurer", color = NimayAccent) }
                 }
                 HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.6f))
-                // Oppdateringer
+                // Ressursmonitor
+                SwitchRow("PC-ressursmonitor", "Vis CPU, RAM og GPU i chatten", settings.resourceMonitorEnabled, onResourceMonitorEnabled)
                 Row(
                     Modifier.fillMaxWidth().padding(vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically

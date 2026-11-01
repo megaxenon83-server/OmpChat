@@ -204,6 +204,7 @@ fun AppRoot(
                                 onOpenTasks = { screen = Screen.Tasks },
                                 onOpenTerminal = { screen = Screen.Terminal },
                                 onOpenGit = { screen = Screen.Git },
+                                resourceMonitorEnabled = settings.resourceMonitorEnabled,
                                 onReconnect = { viewModel.repository.connect() },
                                 onReloadModels = { viewModel.reloadModels() },
                                 onClearTerminal = { viewModel.clearTerminal() },
@@ -257,11 +258,12 @@ fun AppRoot(
                                 onVoiceSpeed = { viewModel.settings.setVoiceSpeed(it) },
                                 onVoiceBargeIn = { viewModel.settings.setVoiceBargeIn(it) },
                                 onVoiceAutoListen = { viewModel.settings.setVoiceAutoListen(it) },
-                                onTestVoice = { viewModel.toast("Stemmetest ennå ikke tilknyttet til TTS-motor") },
+                                onTestVoice = { viewModel.toast("Stemmetest ennÃƒÆ’Ã‚Â¥ ikke tilknyttet til TTS-motor") },
                                 onLoadVoiceEngines = { viewModel.loadVoiceEngines() },
                                 onGotifySave = { e, u, t -> viewModel.saveGotifyConfig(e, u, t) },
                                 onGotifyTest = { viewModel.testGotify() },
-                                onOpenGotify = { screen = Screen.Gotify }
+                                onOpenGotify = { screen = Screen.Gotify },
+                                onResourceMonitorEnabled = { viewModel.settings.setResourceMonitorEnabled(it) }
                             )
 
                             Screen.Voice -> VoiceCallScreen(

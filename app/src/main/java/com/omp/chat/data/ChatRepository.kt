@@ -18,6 +18,7 @@ import java.util.Locale
 data class RepoState(
     val connected: Boolean = false,
     val connecting: Boolean = false,
+    val resources: PcResources? = null,
     val error: String = "",
     val projects: List<Project> = emptyList(),
     val sessions: List<SessionSummary> = emptyList(),
@@ -216,14 +217,59 @@ class ChatRepository(private val settings: SettingsStore) {
             startEvents()
             refreshAll()
             resumeLast()
+            startResourcesPolling()
     }
 }
 
+    private var resourcesPollingJob: Job? = null
+
+    /** Hent PC-ressurser (CPU, RAM, GPU) fra Bridge. */
+    fun loadResources() {
+        if (!state.value.connected) return
+        scope.launch(Dispatchers.IO) {
+            try {
+                val json = client.resources()
+                val resources = PcResources(
+                    cpuPercent = json.get("cpu")?.asJsonObject?.get("percent")?.asInt ?: 0,
+                    cpuCores = json.get("cpu")?.asJsonObject?.get("cores")?.asInt ?: 0,
+                    ramPercent = json.get("ram")?.asJsonObject?.get("percent")?.asInt ?: 0,
+                    ramUsedBytes = json.get("ram")?.asJsonObject?.get("usedBytes")?.asLong ?: 0,
+                    ramTotalBytes = json.get("ram")?.asJsonObject?.get("totalBytes")?.asLong ?: 0,
+                    gpuPercent = json.get("gpu")?.asJsonObject?.get("percent")?.asInt ?: 0,
+                    gpuName = json.get("gpu")?.asJsonObject?.get("name")?.asString ?: "",
+                    gpuMemoryUsedBytes = json.get("gpu")?.asJsonObject?.get("memoryUsedBytes")?.asLong ?: 0,
+                    gpuMemoryTotalBytes = json.get("gpu")?.asJsonObject?.get("memoryTotalBytes")?.asLong ?: 0,
+                    timestamp = json.get("timestamp")?.asLong ?: 0
+                )
+                _state.update { it.copy(resources = resources) }
+            } catch (e: Exception) {
+                // Stille feil
+            }
+        }
+    }
+
+    /** Start periodisk polling av PC-ressurser (hvert 5. sekund). */
+    fun startResourcesPolling() {
+        resourcesPollingJob?.cancel()
+        resourcesPollingJob = scope.launch {
+            while (isActive) {
+                loadResources()
+                delay(30000)
+            }
+        }
+    }
+
+    /** Stopp polling av PC-ressurser. */
+    fun stopResourcesPolling() {
+        resourcesPollingJob?.cancel()
+        resourcesPollingJob = null
+    }
     /** Adressen som skal brukes: vinneren fra probe, ellers primæradressen. */
     private fun winningUrl(probes: List<EndpointProbe>): String =
         probes.firstOrNull { it.ok }?.url ?: settings.baseUrl()
 
     fun disconnect() {
+        stopResourcesPolling()
         eventJob?.cancel()
         eventJob = null
         _state.update { RepoState() }

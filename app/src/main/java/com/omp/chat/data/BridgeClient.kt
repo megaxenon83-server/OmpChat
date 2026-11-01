@@ -71,6 +71,7 @@ class BridgeClient(
     }
 
     fun health(): JsonObject = call("GET", "/api/health")
+    fun resources(): JsonObject = call("GET", "/api/resources")
 
     // -----------------------------------------------------------------------
     // REST surface

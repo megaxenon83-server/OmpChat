@@ -94,6 +94,7 @@ import com.omp.chat.data.TodoPhase
 import com.omp.chat.data.UiRequest
 import com.omp.chat.ui.LocalStrings
 import com.omp.chat.ui.components.TokenIndicator
+import com.omp.chat.ui.components.ResourceMonitorChip
 import com.omp.chat.ui.components.ApprovalSheet
 import com.omp.chat.ui.components.Attachment
 import com.omp.chat.ui.components.AttachSheet
@@ -140,6 +141,7 @@ fun ChatScreen(
     onOpenTasks: () -> Unit = {},
     onOpenTerminal: () -> Unit = {},
     onOpenGit: () -> Unit = {},
+    resourceMonitorEnabled: Boolean = false,
     onReconnect: () -> Unit,
     onReloadModels: () -> Unit,
     onClearTerminal: () -> Unit,
@@ -192,12 +194,12 @@ fun ChatScreen(
         derivedStateOf { listState.canScrollForward }
     }
 
-    // Autofølg under streaming: følg alltid nyeste mens OMP svarer.
+    // AutofÃƒÆ’Ã‚Â¸lg under streaming: fÃƒÆ’Ã‚Â¸lg alltid nyeste mens OMP svarer.
     LaunchedEffect(state.sessionFile) {
         autoFollow = true
     }
 
-    // Når brukeren scroller manuelt, slutt å autofølg. Gjenoppta når bunnen nås.
+    // NÃƒÆ’Ã‚Â¥r brukeren scroller manuelt, slutt ÃƒÆ’Ã‚Â¥ autofÃƒÆ’Ã‚Â¸lg. Gjenoppta nÃƒÆ’Ã‚Â¥r bunnen nÃƒÆ’Ã‚Â¥s.
     LaunchedEffect(listState) {
         var wasScrolling = false
         snapshotFlow { listState.isScrollInProgress }.collect { scrolling ->
@@ -208,16 +210,16 @@ fun ChatScreen(
         }
     }
 
-    // Manuelt avstandssjekk: hvis brukeren er nederst, hold bunnen følges.
+    // Manuelt avstandssjekk: hvis brukeren er nederst, hold bunnen fÃƒÆ’Ã‚Â¸lges.
     LaunchedEffect(listState) {
         snapshotFlow { listState.canScrollForward }.collect { away ->
             if (!away) autoFollow = true
         }
     }
 
-    // Scroll til siste når innholdet vokser. Storleken på listene er ikke nok:
-    // delta-tekst og verktøykall streaming oppdateres OG-standard i den siste
-    // melding uten at listen vokser, så fingerprint av det siste element.
+    // Scroll til siste nÃƒÆ’Ã‚Â¥r innholdet vokser. Storleken pÃƒÆ’Ã‚Â¥ listene er ikke nok:
+    // delta-tekst og verktÃƒÆ’Ã‚Â¸ykall streaming oppdateres OG-standard i den siste
+    // melding uten at listen vokser, sÃƒÆ’Ã‚Â¥ fingerprint av det siste element.
     val tailFingerprint = remember(state.messages) {
         tailFingerprint(state.messages.lastOrNull())
     }
@@ -340,14 +342,18 @@ fun ChatScreen(
                             tint = NimayTextSecondary,
                             modifier = Modifier.size(12.dp)
                         )
-                        // Tokenindikator – integrert i modell-raden, ingen egen boks
+                        // Tokenindikator ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“ integrert i modell-raden, ingen egen boks
                         if (state.chat.contextWindow > 0 || state.chat.contextTokens > 0) {
                             TokenIndicator(
                                 used = state.chat.contextTokens,
                                 max = state.chat.contextWindow,
-                                modifier = Modifier.padding(start = 4.dp)
                             )
                         }
+                        ResourceMonitorChip(
+                            resources = state.resources,
+                            enabled = resourceMonitorEnabled,
+                            modifier = Modifier.padding(start = 4.dp)
+                        )
                     }
                 }
 

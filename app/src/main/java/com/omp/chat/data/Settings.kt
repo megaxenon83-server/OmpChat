@@ -32,7 +32,8 @@ data class AppSettings(
     val gotifyEnabled: Boolean = false,
     val gotifyServer: String = "",
     val gotifyToken: String = "",
-    val terminalFontSize: Int = 14
+    val terminalFontSize: Int = 14,
+    val resourceMonitorEnabled: Boolean = true
 )
 
 /**
@@ -88,7 +89,8 @@ class SettingsStore(context: Context) {
         gotifyEnabled = prefs.getBoolean(KEY_GOTIFY_ENABLED, false),
         gotifyServer = prefs.getString(KEY_GOTIFY_SERVER, "") ?: "",
         gotifyToken = prefs.getString(KEY_GOTIFY_TOKEN, "") ?: "",
-        terminalFontSize = prefs.getInt(KEY_TERMINAL_FONT_SIZE, 14)
+        terminalFontSize = prefs.getInt(KEY_TERMINAL_FONT_SIZE, 14),
+        resourceMonitorEnabled = prefs.getBoolean(KEY_RESOURCE_MONITOR, true)
     )
 
     fun saveConnection(baseUrl: String, token: String) {
@@ -204,6 +206,11 @@ class SettingsStore(context: Context) {
         refresh()
     }
 
+    fun setResourceMonitorEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_RESOURCE_MONITOR, enabled).apply()
+        refresh()
+    }
+
     fun rememberLast(cwd: String, sessionFile: String?) {
         prefs.edit()
             .putString(KEY_LAST_CWD, cwd)
@@ -254,6 +261,7 @@ class SettingsStore(context: Context) {
         private const val KEY_GOTIFY_SERVER = "gotify_server"
         private const val KEY_GOTIFY_TOKEN = "gotify_token"
         private const val KEY_TERMINAL_FONT_SIZE = "terminal_font_size"
+        private const val KEY_RESOURCE_MONITOR = "resource_monitor_enabled"
 
         /** Accepts `omp://host:port?token=...`, `omp2://…`, `ompchat://…` and plain URLs. */
         fun normalizeBaseUrl(raw: String): String {

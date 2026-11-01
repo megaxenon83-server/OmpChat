@@ -434,3 +434,18 @@ data class VoiceEngineList(
     val profile: String,
     val settings: Map<String, Any?>
 )
+
+
+/** PC resource usage snapshot. */
+data class PcResources(
+    val cpuPercent: Int = 0,
+    val cpuCores: Int = 0,
+    val ramPercent: Int = 0,
+    val ramUsedBytes: Long = 0,
+    val ramTotalBytes: Long = 0,
+    val gpuPercent: Int = 0,
+    val gpuName: String = "",
+    val gpuMemoryUsedBytes: Long = 0,
+    val gpuMemoryTotalBytes: Long = 0,
+    val timestamp: Long = 0
+)
