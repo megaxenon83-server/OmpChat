@@ -98,6 +98,8 @@ Phone (Compose)  →  HTTP + SSE  →  bridge/omp-bridge.mjs  →  NDJSON  →  
 flatpak install net.nimay.ompbridge.flatpak
 ```
 
+> **Note:** The Linux Flatpak has not been tested yet. It is provided as-is and may require adjustments.
+
 ### 2. Install the app on your phone
 
 Download `OmpChat-2.9.46.apk` from [Releases](https://github.com/megaxenon83-server/OmpChat/releases) and install.
