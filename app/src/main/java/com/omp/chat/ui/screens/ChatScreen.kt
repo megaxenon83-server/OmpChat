@@ -95,6 +95,7 @@ import com.omp.chat.data.UiRequest
 import com.omp.chat.ui.LocalStrings
 import com.omp.chat.ui.components.TokenIndicator
 import com.omp.chat.ui.components.ResourceMonitorChip
+import com.omp.chat.ui.components.ExportChatChip
 import com.omp.chat.ui.components.ApprovalSheet
 import com.omp.chat.ui.components.Attachment
 import com.omp.chat.ui.components.AttachSheet
@@ -143,6 +144,8 @@ fun ChatScreen(
     onOpenGit: () -> Unit = {},
     resourceMonitorEnabled: Boolean = false,
     onLoadResources: () -> Unit = {},
+    exportChatEnabled: Boolean = false,
+    onExportChat: (Int) -> Unit = {},
     onReconnect: () -> Unit,
     onReloadModels: () -> Unit,
     onClearTerminal: () -> Unit,
@@ -358,6 +361,14 @@ fun ChatScreen(
                     resources = state.resources,
                     enabled = resourceMonitorEnabled,
                     onRefresh = onLoadResources,
+                    modifier = Modifier.padding(end = 4.dp)
+                )
+
+                // Eksport-chat - diskret chip i header
+                ExportChatChip(
+                    strings = strings,
+                    onExport = onExportChat,
+                    onToast = onToast,
                     modifier = Modifier.padding(end = 4.dp)
                 )
 

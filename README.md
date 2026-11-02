@@ -6,7 +6,7 @@ OmpChat does not run models itself and does not talk directly to Ollama. It talk
 
 > **Note:** This project is a work in progress. It is already stable for daily use, but some features (like voice) are still being finalized. See the [Version History](#version-history) for details.
 
-[![Version](https://img.shields.io/badge/version-2.9.52-blue)](https://github.com/megaxenon83-server/OmpChat/releases)
+[![Version](https://img.shields.io/badge/version-2.9.53-blue)](https://github.com/megaxenon83-server/OmpChat/releases)
 [![Platform](https://img.shields.io/badge/platform-Android%207.0%2B-green)](https://github.com/megaxenon83-server/OmpChat/releases)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 

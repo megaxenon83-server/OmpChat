@@ -14,6 +14,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.Locale
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 
 data class RepoState(
     val connected: Boolean = false,
@@ -246,6 +249,24 @@ class ChatRepository(private val settings: SettingsStore) {
                 // Stille feil
             }
         }
+    }
+
+    /** Kopierer siste [count] chat-meldinger til utklipp. */
+    fun exportLastNChats(count: Int) {
+        val messages = _state.value.messages
+        if (messages.isEmpty()) return
+        val lastN = messages.takeLast(count)
+        val sb = StringBuilder()
+        for (msg in lastN) {
+            val role = if (msg.isUser) "Bruker" else "Assistent"
+            val time = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(msg.timestamp))
+            sb.append("[$time] $role: ${msg.text}\n\n")
+        }
+        val text = sb.toString().trimEnd()
+        val ctx = settings.context
+        val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clip = ClipData.newPlainText("OmpChat-eksport", text)
+        clipboard.setPrimaryClip(clip)
     }
 
     /** Start periodisk polling av PC-ressurser (hvert 5. sekund). */

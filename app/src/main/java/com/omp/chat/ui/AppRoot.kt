@@ -206,6 +206,10 @@ fun AppRoot(
                                 onOpenGit = { screen = Screen.Git },
                                 resourceMonitorEnabled = settings.resourceMonitorEnabled,
                                 onLoadResources = { viewModel.repository.loadResources() },
+                                exportChatEnabled = settings.resourceMonitorEnabled,
+                                onExportChat = { count ->
+                                    viewModel.repository.exportLastNChats(count)
+                                },
                                 onReconnect = { viewModel.repository.connect() },
                                 onReloadModels = { viewModel.reloadModels() },
                                 onClearTerminal = { viewModel.clearTerminal() },

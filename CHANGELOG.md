@@ -1,6 +1,17 @@
 # OmpChat CHANGELOG.md - Utført endringer
 
 
+### 2.9.53 - Eksport-chat knapp i header (02.11.2026)
+
+**Android APK 2.9.53 (kode 78)**
+- **Ny funksjon: Eksport-chat-knapp** i chat-header ved siden av ressursmonitor-knappen
+- Samme diskrete stil (32dp ikon-knapp uten tekst) som ressursmonitor-knappen
+- Nedtrekksmeny med valg: "Siste 3 chats", "Siste 5 chats", "Siste 10 chats"
+- Kopierer valgte chats til utklipp som formatertekst (tidsstempel + rolle + melding)
+- Brukbar for å lime inn samtaler i andre apper
+- Slå av/på sammen med ressursmonitor-innstillingen (resourceMonitorEnabled)
+- SHA-256: 05AE91FF5ABE333CB5411C1951568118CFEC2BE7E3E864AC5434AA2975069CF4
+
 ### 2.9.52 / Installer 3.2.1 - Resource monitor fix + bridge /api/resources (02.11.2026)
 
 **Android APK 2.9.52 (kode 77)**
