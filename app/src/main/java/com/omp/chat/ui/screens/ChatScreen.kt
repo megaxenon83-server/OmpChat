@@ -194,12 +194,12 @@ fun ChatScreen(
         derivedStateOf { listState.canScrollForward }
     }
 
-    // AutofÃƒÆ’Ã‚Â¸lg under streaming: fÃƒÆ’Ã‚Â¸lg alltid nyeste mens OMP svarer.
+    // AutofÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸lg under streaming: fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸lg alltid nyeste mens OMP svarer.
     LaunchedEffect(state.sessionFile) {
         autoFollow = true
     }
 
-    // NÃƒÆ’Ã‚Â¥r brukeren scroller manuelt, slutt ÃƒÆ’Ã‚Â¥ autofÃƒÆ’Ã‚Â¸lg. Gjenoppta nÃƒÆ’Ã‚Â¥r bunnen nÃƒÆ’Ã‚Â¥s.
+    // NÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¥r brukeren scroller manuelt, slutt ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¥ autofÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸lg. Gjenoppta nÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¥r bunnen nÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¥s.
     LaunchedEffect(listState) {
         var wasScrolling = false
         snapshotFlow { listState.isScrollInProgress }.collect { scrolling ->
@@ -210,16 +210,16 @@ fun ChatScreen(
         }
     }
 
-    // Manuelt avstandssjekk: hvis brukeren er nederst, hold bunnen fÃƒÆ’Ã‚Â¸lges.
+    // Manuelt avstandssjekk: hvis brukeren er nederst, hold bunnen fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸lges.
     LaunchedEffect(listState) {
         snapshotFlow { listState.canScrollForward }.collect { away ->
             if (!away) autoFollow = true
         }
     }
 
-    // Scroll til siste nÃƒÆ’Ã‚Â¥r innholdet vokser. Storleken pÃƒÆ’Ã‚Â¥ listene er ikke nok:
-    // delta-tekst og verktÃƒÆ’Ã‚Â¸ykall streaming oppdateres OG-standard i den siste
-    // melding uten at listen vokser, sÃƒÆ’Ã‚Â¥ fingerprint av det siste element.
+    // Scroll til siste nÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¥r innholdet vokser. Storleken pÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¥ listene er ikke nok:
+    // delta-tekst og verktÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ykall streaming oppdateres OG-standard i den siste
+    // melding uten at listen vokser, sÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¥ fingerprint av det siste element.
     val tailFingerprint = remember(state.messages) {
         tailFingerprint(state.messages.lastOrNull())
     }
@@ -307,6 +307,12 @@ fun ChatScreen(
                     )
                 }
 
+                ResourceMonitorChip(
+                    resources = state.resources,
+                    enabled = resourceMonitorEnabled,
+                    modifier = Modifier.padding(end = 4.dp)
+                )
+
                 Column(
                     modifier = Modifier
                         .weight(1f)
@@ -342,18 +348,13 @@ fun ChatScreen(
                             tint = NimayTextSecondary,
                             modifier = Modifier.size(12.dp)
                         )
-                        // Tokenindikator ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“ integrert i modell-raden, ingen egen boks
+                        // Tokenindikator ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã¢â‚¬Å“ integrert i modell-raden, ingen egen boks
                         if (state.chat.contextWindow > 0 || state.chat.contextTokens > 0) {
                             TokenIndicator(
                                 used = state.chat.contextTokens,
                                 max = state.chat.contextWindow,
                             )
                         }
-                        ResourceMonitorChip(
-                            resources = state.resources,
-                            enabled = resourceMonitorEnabled,
-                            modifier = Modifier.padding(start = 4.dp)
-                        )
                     }
                 }
 
