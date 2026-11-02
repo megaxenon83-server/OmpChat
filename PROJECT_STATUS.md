@@ -999,3 +999,32 @@ Fixed: Changed source offset from cipher.iv.size to 0.
 - update.json updated (2.9.50, code 75)
 - index.html updated
 - Nginx reloaded
+
+## 2.9.51 — 2026-11-02
+
+**Fix: resource monitor popup viser ekte data + ingen layout-forskrivning**
+
+### Rotårsak funnet (faktisk, ikke gjett)
+Logcat bevis at dataflyten fungerte hele tiden: loadResources() kalles, /api/resources returnerer gyldig JSON (cpu=3, ram=34, gpu=0), parsing lykkes, og _state oppdateres (esources=true). Feilen var at Popup-innholdet i Compose ikke pålitelig rekomponerte når esources endret seg — popup-en heng på "Laster ressurser..." selv etter at data var hentet.
+
+### Fiks (kun ressursmonitor-knappen)
+- Popup rendres via Compose Popup (overlay-vindu): påvirker ikke header-radens måling ? chip holder 32dp, **flytter seg ikke ved trykk**.
+- Popup-innholdet rekomponeres når esources endres ? viser ekte CPU/RAM/GPU-data så snart de er tilgjengelig.
+- On-demand lasting: chip kaller loadResources() ved åpning (i tillegg til 30s-polling).
+- Feilsøkningslogg: const val DEBUG = false i ResourceMonitor.kt (tag "OmpChat"), slå på for midlertidig logg.
+
+### Endrede filer
+- app/src/main/java/com/omp/chat/ui/components/ResourceMonitor.kt - Popup + onRefresh + DEBUG-logg
+- app/src/main/java/com/omp/chat/ui/screens/ChatScreen.kt - onLoadResources-param (var allerede på plass)
+- app/src/main/java/com/omp/chat/ui/AppRoot.kt - onLoadResources koblet til loadResources (var allerede på plass)
+- app/build.gradle - versjon 2.9.51 (code 76)
+
+### APK
+- OmpChat-2.9.51.apk (13,466,103 B, SHA-256: BB6043F485BA442D42B0D71FFD167399CCA4B97661FEF94A81B0CBCD89CC00E2)
+
+### Publisert
+- APK opplastet til chat.nimay.net
+- update.json oppdatert (2.9.51, code 76)
+- index.html oppdatert
+- Nginx reloadet
+- Nedlastingslenke verifisert (HTTP 200, SHA-256 matcher)

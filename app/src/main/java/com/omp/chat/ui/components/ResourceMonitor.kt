@@ -25,9 +25,16 @@ import com.omp.chat.data.PcResources
 /**
  * Diskret ressursmonitor-knapp for chat-header.
  * Viser et lite ikon uten tekst. Ved trykk vises popup med CPU/RAM/GPU.
- * Popup rendres i eget overlay-vindu (Popup) slik at chippen holder 32dp
- * og header-layouten ikke forskyves ved trykk.
+ *
+ * Popup rendres via Compose Popup (eget overlay-vindu), så den ikke påvirker
+ * header-radens måling — chippen holder 32dp og flytter seg ikke når popup åpnes.
+ * Popup-innholdet rekomponeres når [resources] endres, så ekte data vises så snart
+ * de er hentet fra bridgen.
+ *
+ * Sett [DEBUG] til true for midlertidig feilsøkningslogging i logcat (tag "OmpChat").
  */
+private const val DEBUG = false
+
 @Composable
 fun ResourceMonitorChip(
     resources: PcResources?,
@@ -38,6 +45,12 @@ fun ResourceMonitorChip(
     if (!enabled) return
 
     var showPopup by remember { mutableStateOf(false) }
+    var lastResources by remember { mutableStateOf<PcResources?>(null) }
+
+    if (DEBUG && lastResources != resources) {
+        android.util.Log.d("OmpChat", "RESOURCEMONITOR resources changed: null=${resources == null}")
+        lastResources = resources
+    }
 
     Box(modifier = modifier) {
         // Diskret ikon-knapp (32dp, fast størrelse)
@@ -45,6 +58,9 @@ fun ResourceMonitorChip(
             onClick = {
                 val opening = !showPopup
                 showPopup = opening
+                if (DEBUG) {
+                    android.util.Log.d("OmpChat", "RESOURCEMONITOR tap showPopup=$opening resources=null=${resources == null}")
+                }
                 if (opening) onRefresh()
             },
             shape = CircleShape,
@@ -61,7 +77,7 @@ fun ResourceMonitorChip(
             }
         }
 
-        // Popup med detaljer - rendres i overlay, påvirker ikke layout
+        // Popup med detaljer i eget overlay-vindu - påvirker ikke header-layout
         if (showPopup) {
             val density = LocalDensity.current
             Popup(
