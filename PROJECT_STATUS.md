@@ -1028,3 +1028,27 @@ Logcat bevis at dataflyten fungerte hele tiden: loadResources() kalles, /api/res
 - index.html oppdatert
 - Nginx reloadet
 - Nedlastingslenke verifisert (HTTP 200, SHA-256 matcher)
+
+## 2.9.52 — 2026-11-02
+
+**Fix: app kan oppdateres uten avinstallasjon (samme signering på debug og release)**
+
+### Problem
+Debug-APK signeres med Androids standard debug-nøkkel, release-APK med ompchat-release.jks. Ulik signering betyr at Android nektar oppdatering — man må avinstallere før man kan installere ny versjon.
+
+### Fiks
+- debug build type bruker nå samme signingConfigs.release som elease ? begge signeres med ompchat-release.jks
+- Oppdatering fungerer nå uten å avinstallere først
+
+### Endrede filer
+- app/build.gradle - debug build type får signingConfig release; versjon 2.9.52 (code 77)
+
+### APK
+- OmpChat-2.9.52.apk (13,466,106 B, SHA-256: 11DD577D724E706F9DBEB588D4D113C627C9174DBE413525E8C4E56E84CA7D43)
+
+### Publisert
+- APK opplastet til chat.nimay.net
+- update.json oppdatert (2.9.52, code 77)
+- index.html oppdatert
+- Nginx reloadet
+- Nedlastingslenke verifisert (HTTP 200, SHA-256 matcher)

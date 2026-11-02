@@ -18,8 +18,8 @@ android {
         applicationId "com.omp.chat"
         minSdk 24
         targetSdk 34
-        versionCode 76
-        versionName "2.9.51"
+        versionCode 77
+        versionName "2.9.52"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -42,6 +42,9 @@ android {
             minifyEnabled false
             signingConfig signingConfigs.release
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            signingConfig signingConfigs.release
         }
     }
     compileOptions {
