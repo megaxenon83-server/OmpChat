@@ -1,6 +1,16 @@
 # OmpChat CHANGELOG.md - Utført endringer
 
 
+### 2.9.55 - Heft enhver melding + pinnet-meldinger liste (02.11.2026)
+
+**Android APK 2.9.55 (kode 80)**
+- **Heft hvilken som helst melding** - pushpin-knapp på hver enkelt meldingboble (bruker og assistent)
+- **Pinnet-meldinger liste** - trykk på ressursmonitor-chippen i header for å se alle heftede meldinger
+- **Klikk på pinnet melding** i listen for å hoppe direkte til den i chatten
+- **Pinnede meldinger vises øverst** i chatlisten automatisk
+- Samme diskrete stil (32dp ikon-knapp) som de andre knappene
+- SHA-256: 81E0C5C3AC7225025ECA22325FE88D08D9DDD9949295E036F0D3766058074704
+
 ### 2.9.54 - Heft meldinger i chat-header (02.11.2026)
 
 **Android APK 2.9.54 (kode 79)**

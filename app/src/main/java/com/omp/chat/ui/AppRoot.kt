@@ -214,6 +214,9 @@ fun AppRoot(
                                 onTogglePinMessage = { messageId ->
                                     viewModel.repository.togglePinMessage(messageId)
                                 },
+                                onPinnedMessageClicked = { messageId ->
+                                    // Scrolling håndteres internt i ChatScreen
+                                },
                                 onReconnect = { viewModel.repository.connect() },
                                 onReloadModels = { viewModel.reloadModels() },
                                 onClearTerminal = { viewModel.clearTerminal() },

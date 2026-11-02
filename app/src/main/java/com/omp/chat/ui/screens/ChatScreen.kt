@@ -149,6 +149,7 @@ fun ChatScreen(
     onExportChat: (Int) -> Unit = {},
     pinMessagesEnabled: Boolean = false,
     onTogglePinMessage: (String) -> Unit = {},
+    onPinnedMessageClicked: (String) -> Unit = {},
     onReconnect: () -> Unit,
     onReloadModels: () -> Unit,
     onClearTerminal: () -> Unit,
@@ -197,6 +198,25 @@ fun ChatScreen(
 
     val listState = rememberLazyListState()
     var autoFollow by remember { mutableStateOf(true) }
+
+    /** Meldinger sortert med pinnede øverst, ellers kronologisk. */
+    val displayMessages by remember {
+        derivedStateOf {
+            state.messages.sortedWith(
+                compareBy({ it.id in state.pinnedMessageIds }, { it.timestamp })
+            ).reversed()
+        }
+    }
+
+    /** Scroller til en bestemt melding i listen. */
+    val scrollToMessage: (String) -> Unit = { messageId ->
+        val index = displayMessages.indexOfFirst { it.id == messageId }
+        if (index >= 0) {
+            scope.launch {
+                listState.animateScrollToItem(index)
+            }
+        }
+    }
     val canScroll by remember {
         derivedStateOf { listState.canScrollForward }
     }
@@ -375,14 +395,16 @@ fun ChatScreen(
                     modifier = Modifier.padding(end = 4.dp)
                 )
 
-                // Pinne-melding - diskret chip i header
-                val latestMessageId = state.messages.lastOrNull()?.id ?: ""
-                val isLatestPinned = state.pinnedMessageIds.contains(latestMessageId)
+                // Pinne-meldinger - diskret chip i header
                 PinMessageChip(
                     strings = strings,
-                    messageId = latestMessageId,
-                    isPinned = isLatestPinned,
-                    onTogglePin = onTogglePinMessage,
+                    pinnedMessageIds = state.pinnedMessageIds,
+                    messages = state.messages,
+                    onPinToggled = onTogglePinMessage,
+                    onPinnedMessageClicked = { messageId ->
+                        scrollToMessage(messageId)
+                        onPinnedMessageClicked(messageId)
+                    },
                     onToast = onToast,
                     modifier = Modifier.padding(end = 4.dp)
                 )
@@ -491,12 +513,14 @@ fun ChatScreen(
                 )
             } else {
                 MessageList(
-                    messages = state.messages,
+                    messages = displayMessages,
                     streaming = state.streaming,
                     showThinking = showThinking,
                     listState = listState,
                     onRegenerate = onRegenerate,
                     onEdit = { editTarget = it },
+                    onTogglePin = onTogglePinMessage,
+                    pinnedIds = state.pinnedMessageIds,
                     modifier = Modifier.fillMaxSize()
                 )
             }

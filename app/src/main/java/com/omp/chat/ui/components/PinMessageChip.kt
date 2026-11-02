@@ -20,52 +20,59 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+import com.omp.chat.data.ChatMessage
+import com.omp.chat.ui.LocalStrings
 import com.omp.chat.ui.Strings
 
 /**
  * Diskret pinne-knapp for chat-meldinger.
- * Viser et lite pushpin-ikon uten tekst. Ved trykk pinnes eller opp-pinnes meldingen.
+ * Viser et lite pushpin-ikon uten tekst. Ved trykk åpnes en liste med
+ * alle pinnede meldinger som kan åpnes eller opp-pinnes.
  *
  * Popup rendres via Compose Popup (eget overlay-vindu), så den ikke påvirker
  * header-radens måling — chippen holder 32dp og flytter seg ikke når menyen åpnes.
  *
- * [isPinned] angjør om meldingen er pinnet nå.
- * [onTogglePin] kalles med true for å pinne, false for å opp-pinne.
+ * [pinnedMessageIds] er settet med ID-er til pinnede meldinger.
+ * [messages] er alle meldinger i samtalen (for å slå opp tekst av id).
+ * [onPinToggled] kalles med messageId når brukeren bytter pin-status.
+ * [onPinnedMessageClicked] kalles med messageId når brukeren velger en pinnet melding.
  * [onToast] kalles med bekreftelsesmelding.
  */
 @Composable
 fun PinMessageChip(
     strings: Strings,
-    messageId: String,
-    isPinned: Boolean,
-    onTogglePin: (String) -> Unit = {},
+    pinnedMessageIds: Set<String>,
+    messages: List<ChatMessage>,
+    onPinToggled: (String) -> Unit = {},
+    onPinnedMessageClicked: (String) -> Unit = {},
     onToast: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showPopup by remember { mutableStateOf(false) }
 
+    val pinnedMessages = messages.filter { pinnedMessageIds.contains(it.id) }
+    val latestMessageId = messages.lastOrNull()?.id ?: ""
+    val isLatestPinned = pinnedMessageIds.contains(latestMessageId)
+
     Box(modifier = modifier) {
         // Diskret ikon-knapp (32dp, fast størrelse)
         Surface(
-            onClick = {
-                showPopup = true
-                onTogglePin(messageId)
-            },
+            onClick = { showPopup = true },
             shape = CircleShape,
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             modifier = Modifier.size(32.dp)
         ) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                 Icon(
-                    imageVector = if (isPinned) Icons.Default.PushPin else Icons.Default.PushPin,
-                    contentDescription = if (isPinned) strings.unpinMessage else strings.pinMessage,
-                    tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    imageVector = Icons.Default.PushPin,
+                    contentDescription = strings.pinMessage,
+                    tint = if (pinnedMessageIds.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
                 )
             }
         }
 
-        // Bekreftelses-popup i eget overlay-vindu - påvirker ikke header-layout
+        // Pinnede meldinger liste i eget overlay-vindu
         if (showPopup) {
             val density = LocalDensity.current
             Popup(
@@ -78,24 +85,85 @@ fun PinMessageChip(
                     shape = RoundedCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.surfaceContainerHighest,
                     shadowElevation = 8.dp,
-                    modifier = Modifier.width(200.dp)
+                    modifier = Modifier.width(220.dp)
                 ) {
-                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
-                            text = if (isPinned) strings.pinnedMessages else strings.pinMessage,
+                            text = strings.pinnedMessages,
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.Medium
                         )
-                        Text(
-                            text = if (isPinned) "Meldingen er nå heftet øverst i chatten."
-                                 else "Meldingen er nå løsnet.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+
+                        if (pinnedMessages.isEmpty()) {
+                            Text(
+                                text = "Ingen heftede meldinger",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            )
+                        } else {
+                            pinnedMessages.forEach { msg ->
+                                PinnedMessageRow(
+                                    message = msg,
+                                    onClick = { onPinnedMessageClicked(msg.id) },
+                                    onUnpin = { onPinToggled(msg.id); showPopup = false }
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+/**
+ * En rad i listen over pinnede meldinger.
+ * Viser en kort forhåndsvisning av teksten og en opp-pinn-knapp.
+ */
+@Composable
+private fun PinnedMessageRow(
+    message: ChatMessage,
+    onClick: () -> Unit,
+    onUnpin: () -> Unit
+) {
+    val strings = LocalStrings.current
+    val preview = message.text.take(60).ifBlank { "[ingen tekst]" }
+    val time = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(message.timestamp))
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 6.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = if (message.isUser) "Bruker" else "Assistent",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.Bold,
+                fontSize = 10.sp
+            )
+            Text(
+                text = preview,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2
+            )
+            Text(
+                text = time,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                fontSize = 9.sp
+            )
+        }
+        Icon(
+            Icons.Default.PushPin,
+            contentDescription = strings.unpinMessage,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(16.dp)
+        )
     }
 }

@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
@@ -80,6 +81,8 @@ fun MessageList(
     listState: LazyListState,
     onRegenerate: (String) -> Unit,
     onEdit: (ChatMessage) -> Unit,
+    onTogglePin: (String) -> Unit = {},
+    pinnedIds: Set<String> = emptySet(),
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(horizontal = 14.dp, vertical = 12.dp)
 ) {
@@ -92,13 +95,16 @@ fun MessageList(
     ) {
         itemsIndexed(visible, key = { index, message -> "${message.id}-$index" }) { index, message ->
             val isLast = index == visible.lastIndex
+            val isPinned = pinnedIds.contains(message.id)
             MessageItem(
                 message = message,
                 isLast = isLast,
                 streaming = streaming,
                 showThinking = showThinking,
                 onRegenerate = onRegenerate,
-                onEdit = onEdit
+                onEdit = onEdit,
+                onTogglePin = onTogglePin,
+                isPinned = isPinned
             )
         }
         if (streaming && (visible.lastOrNull()?.isAssistant != true || visible.last().text.isBlank())) {
@@ -148,11 +154,13 @@ private fun MessageItem(
     streaming: Boolean,
     showThinking: Boolean,
     onRegenerate: (String) -> Unit,
-    onEdit: (ChatMessage) -> Unit
+    onEdit: (ChatMessage) -> Unit,
+    onTogglePin: (String) -> Unit,
+    isPinned: Boolean
 ) {
     when {
-        message.isUser -> UserMessage(message, onEdit)
-        message.isAssistant -> AssistantMessage(message, isLast, streaming, showThinking, onRegenerate)
+        message.isUser -> UserMessage(message, onEdit, onTogglePin, isPinned)
+        message.isAssistant -> AssistantMessage(message, isLast, streaming, showThinking, onRegenerate, onTogglePin, isPinned)
         message.isTool -> ToolResultMessage(message)
         message.isTerminal -> TerminalMessage(message)
         else -> SystemMessage(message)
@@ -164,7 +172,12 @@ private fun MessageItem(
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun UserMessage(message: ChatMessage, onEdit: (ChatMessage) -> Unit) {
+private fun UserMessage(
+    message: ChatMessage,
+    onEdit: (ChatMessage) -> Unit,
+    onTogglePin: (String) -> Unit,
+    isPinned: Boolean
+) {
     val strings = LocalStrings.current
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -244,6 +257,19 @@ private fun UserMessage(message: ChatMessage, onEdit: (ChatMessage) -> Unit) {
                         modifier = Modifier.size(14.dp)
                     )
                 }
+                Box(
+                    Modifier
+                        .clip(CircleShape)
+                        .clickable { onTogglePin(message.id) }
+                        .padding(4.dp)
+                ) {
+                    Icon(
+                        Icons.Default.PushPin,
+                        contentDescription = if (isPinned) strings.unpinMessage else strings.pinMessage,
+                        tint = if (isPinned) MaterialTheme.colorScheme.primary else NimayTextSecondary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
             }
         }
     }
@@ -259,7 +285,9 @@ private fun AssistantMessage(
     isLast: Boolean,
     streaming: Boolean,
     showThinking: Boolean,
-    onRegenerate: (String) -> Unit
+    onRegenerate: (String) -> Unit,
+    onTogglePin: (String) -> Unit,
+    isPinned: Boolean
 ) {
     val scheme = MaterialTheme.colorScheme
     val strings = LocalStrings.current
@@ -352,6 +380,19 @@ private fun AssistantMessage(
                             }
                         }
                     )
+                    Box(
+                        Modifier
+                            .clip(CircleShape)
+                            .clickable { onTogglePin(message.id) }
+                            .padding(4.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.PushPin,
+                            contentDescription = if (isPinned) strings.unpinMessage else strings.pinMessage,
+                            tint = if (isPinned) MaterialTheme.colorScheme.primary else NimayTextSecondary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
                     if (isLast) {
                         SmallAction(
                             icon = OmpIcons.Refresh,
