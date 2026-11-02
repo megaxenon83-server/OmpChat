@@ -1,16 +1,16 @@
 # OmpChat CHANGELOG.md - Utført endringer
 
 
-### 2.9.52 / Installer 3.2.0 - Resource monitor fix + bridge /api/resources (02.11.2026)
+### 2.9.52 / Installer 3.2.1 - Resource monitor fix + bridge /api/resources (02.11.2026)
 
 **Android APK 2.9.52 (kode 77)**
 - **Ressursmonitor (PC-ressursmonitor):** Popup rendres via Compose Popup (overlay) — chip flytter seg ikke lenger ved trykk. Chip kaller loadResources() ved åpning, viser ekte CPU/RAM/GPU-data istedenfor å henge på 'Laster ressurser...'. On-demand lasting ved tapping (ut over 30s-polling). Feilsøkningslogg: DEBUG-flagg i ResourceMonitor.kt (tag 'OmpChat').
 - **Bridge-krav:** Krever omp-bridge 2.9.9 med /api/resources-endepunkt. På PC-er med eldre bridge vil ressursmonitoren ikke vise data.
 - SHA-256: DE179083D744C054EF8A52ED00F89B9788E2C7FD51AF0752869DCDDE3274152F
 
-**NimayOMP Installer 3.2.0 (Windows bridge)**
+**NimayOMP Installer 3.2.1 (Windows bridge)**
 - **Bridge:** omp-bridge.mjs oppdatert med /api/resources-endepunkt (versjon 2.9.9). Kun bridge-koden er endret i installeren — ingen APK-endring i installer-pakken.
-- SHA-256: E35E13925DDC0D5FD2B03CDED1A944523FEE57DADC415C6F32F5DCBCF570D51F
+- SHA-256: 8AE882849AD98CBC6381D65D26C51B38C1A44A2D4912097A15C97B7209D93F6D
 
 **GitHub release:** https://github.com/megaxenon83-server/OmpChat/releases/tag/v3.2.0
 
