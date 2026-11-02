@@ -25,7 +25,115 @@ import { fileURLToPath } from "node:url";
 
 const VERSION = "2.9.9";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const OMP_BIN = process.env.OMP_BIN || path.join(os.homedir(), ".bun", "bin", process.execPath.endsWith("bun.exe") ? "omp.exe" : "omp.exe");
+
+// Resource monitoring state
+let prevCpuTimes = null;
+
+async function getResources() {
+  // CPU
+  const cpus = os.cpus();
+  const cpuTimes = cpus.map((c) => c.times);
+  const totalIdle = cpuTimes.reduce((sum, t) => sum + t.idle, 0);
+  const totalTick = cpuTimes.reduce((sum, t) => sum + t.user + t.nice + t.sys + t.idle + t.irq, 0);
+
+  let cpuPercent = 0;
+  if (prevCpuTimes) {
+    const idleDelta = totalIdle - prevCpuTimes.idle;
+    const totalDelta = totalTick - prevCpuTimes.total;
+    cpuPercent = totalDelta > 0 ? Math.round((1 - idleDelta / totalDelta) * 100) : 0;
+  }
+  prevCpuTimes = { idle: totalIdle, total: totalTick };
+
+  // RAM
+  const totalMem = os.totalmem();
+  const freeMem = os.freemem();
+  const usedMem = totalMem - freeMem;
+  const ramPercent = Math.round((usedMem / totalMem) * 100);
+
+  // GPU (via PowerShell performance counters — works for all vendors on Windows 10+)
+  let gpuPercent = 0;
+  let gpuName = "";
+  let gpuMemoryTotal = 0;
+  let gpuMemoryUsed = 0;
+
+  try {
+    const gpuUtil = execSync(
+      'powershell -NoProfile -Command "(Get-Counter \'\\GPU Engine(*)\\Utilization Percentage\' -ErrorAction SilentlyContinue).CounterSamples | Measure-Object -Property CookedValue -Sum | Select-Object -ExpandProperty Sum"',
+      { timeout: 3000, windowsHide: true }
+    ).toString().trim();
+    if (gpuUtil && !isNaN(parseFloat(gpuUtil))) {
+      gpuPercent = Math.round(parseFloat(gpuUtil));
+    }
+  } catch (e) {
+    // GPU counter not available
+  }
+
+  try {
+    const gpuInfo = execSync(
+      'powershell -NoProfile -Command "Get-CimInstance Win32_VideoController | Select-Object -First 1 Name, AdapterRAM | ConvertTo-Json"',
+      { timeout: 3000, windowsHide: true }
+    ).toString().trim();
+    const parsed = JSON.parse(gpuInfo);
+    gpuName = parsed?.Name || "";
+    gpuMemoryTotal = parsed?.AdapterRAM || 0;
+  } catch (e) {
+    // GPU info not available
+  }
+
+  // Try nvidia-smi for more accurate GPU memory (NVIDIA only)
+  try {
+    const nvidiaOut = execSync(
+      'nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits',
+      { timeout: 3000, windowsHide: true }
+    ).toString().trim();
+    const parts = nvidiaOut.split(",").map((s) => s.trim());
+    if (parts.length >= 2) {
+      gpuMemoryUsed = parseInt(parts[0]) * 1024 * 1024; // MB to bytes
+      gpuMemoryTotal = parseInt(parts[1]) * 1024 * 1024;
+    }
+  } catch (e) {
+    // Not NVIDIA or nvidia-smi not available
+  }
+
+  return {
+    cpu: { percent: Math.max(0, Math.min(100, cpuPercent)), cores: cpus.length },
+    ram: { percent: Math.max(0, Math.min(100, ramPercent)), usedBytes: usedMem, totalBytes: totalMem },
+    gpu: { percent: Math.max(0, Math.min(100, gpuPercent)), name: gpuName, memoryUsedBytes: gpuMemoryUsed, memoryTotalBytes: gpuMemoryTotal },
+    timestamp: Date.now(),
+  };
+}
+const OMP_BIN = (() => {
+  // 1. Respect OMP_BIN environment variable
+  if (process.env.OMP_BIN) return process.env.OMP_BIN;
+  // 2. Search PATH for omp / omp.exe
+  const pathEnv = process.env.PATH || "";
+  const pathDirs = pathEnv.split(path.delimiter).filter(Boolean);
+  const ompNames = process.platform === "win32" ? ["omp.exe", "omp.cmd", "omp.bat"] : ["omp"];
+  for (const dir of pathDirs) {
+    for (const name of ompNames) {
+      const candidate = path.join(dir, name);
+      try {
+        if (fs.existsSync(candidate)) return candidate;
+      } catch { /* ignore */ }
+    }
+  }
+  // 3. Common npm global install locations
+  const npmGlobalCandidates = [
+    path.join(os.homedir(), "AppData", "Roaming", "npm", "omp.exe"),
+    path.join(os.homedir(), "AppData", "Roaming", "npm", "omp"),
+    path.join(os.homedir(), ".npm-global", "bin", "omp.exe"),
+    path.join(os.homedir(), ".npm-global", "bin", "omp"),
+    "/usr/local/bin/omp",
+    "/usr/bin/omp",
+  ];
+  for (const candidate of npmGlobalCandidates) {
+    try {
+      if (fs.existsSync(candidate)) return candidate;
+    } catch { /* ignore */ }
+  }
+  // 4. Fall back to Bun install location
+  return path.join(os.homedir(), ".bun", "bin", "omp.exe");
+})();
 const HOME = os.homedir();
 const SESSIONS_ROOT = path.join(HOME, ".omp", "agent", "sessions");
 const TRASH_ROOT = path.join(SESSIONS_ROOT, "_ompchat-trash");
@@ -237,7 +345,8 @@ function log(level, message) {
   logLines.push(line);
   if (logLines.length > LOG_LIMIT) logLines.shift();
   if (process.env.OMPCHAT_BRIDGE_QUIET === "1" && level === "debug") return;
-  console.log(line);
+  // Skriver ikke til stdout for å unngå at bro-status forurenser OMP-terminalen.
+  // Loggen er fortsatt tilgjengelig via /api/diagnostics.
 }
 
 function logFileTail(limit = 200) {
@@ -1954,6 +2063,15 @@ async function handle(req, res) {
         });
       }
 
+      case "GET /api/resources": {
+        try {
+          const resources = await getResources();
+          return json(res, 200, resources);
+        } catch (e) {
+          return json(res, 500, { error: "Kunne ikke hente ressurser", detail: String(e?.message || e) });
+        }
+      }
+
       case "GET /api/projects":
         return json(res, 200, { projects: projects() });
 
@@ -3230,12 +3348,10 @@ function handleWebSocket(req, socket) {
   );
   socket.setNoDelay(true);
 
-  // Send buffered output first (with a small delay to let the shell start)
-  setTimeout(() => {
-    if (session.buffer) {
-      try { wsSendText(socket, session.buffer); } catch {}
-    }
-  }, 300);
+  // Send buffered output first
+  if (session.buffer) {
+    try { wsSendText(socket, session.buffer); } catch {}
+  }
 
   session.sockets.add(socket);
 
