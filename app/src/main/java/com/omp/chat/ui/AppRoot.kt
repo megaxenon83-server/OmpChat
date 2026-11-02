@@ -217,6 +217,12 @@ fun AppRoot(
                                 onPinnedMessageClicked = { messageId ->
                                     // Scrolling håndteres internt i ChatScreen
                                 },
+                                onOpenActiveChat = {
+                                    val activeSession = state.sessions.firstOrNull { it.file == state.sessionFile }
+                                    if (activeSession != null) {
+                                        viewModel.repository.openSession(activeSession)
+                                    }
+                                },
                                 onReconnect = { viewModel.repository.connect() },
                                 onReloadModels = { viewModel.reloadModels() },
                                 onClearTerminal = { viewModel.clearTerminal() },

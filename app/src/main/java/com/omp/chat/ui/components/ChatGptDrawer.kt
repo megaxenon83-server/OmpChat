@@ -81,6 +81,7 @@ fun ChatGptDrawerContent(
     onOpenTerminal: () -> Unit,
     onOpenGit: () -> Unit,
     onReconnect: () -> Unit,
+    onOpenActiveChat: () -> Unit,
     onToggleFavorite: (String) -> Unit,
     isFavorite: (String) -> Boolean,
     onCloseDrawer: () -> Unit
@@ -593,6 +594,19 @@ fun ChatGptDrawerContent(
                     Icon(
                         Icons.Default.Settings,
                         contentDescription = strings.settings,
+                        tint = NimayTextSecondary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                // Gå til aktiv chat på PC
+                IconButton(
+                    onClick = onOpenActiveChat,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        OmpIcons.Chat,
+                        contentDescription = strings.goToActiveChat,
                         tint = NimayTextSecondary,
                         modifier = Modifier.size(18.dp)
                     )

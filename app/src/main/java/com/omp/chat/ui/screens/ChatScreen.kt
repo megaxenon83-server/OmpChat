@@ -150,6 +150,7 @@ fun ChatScreen(
     pinMessagesEnabled: Boolean = false,
     onTogglePinMessage: (String) -> Unit = {},
     onPinnedMessageClicked: (String) -> Unit = {},
+    onOpenActiveChat: () -> Unit = {},
     onReconnect: () -> Unit,
     onReloadModels: () -> Unit,
     onClearTerminal: () -> Unit,
@@ -302,7 +303,8 @@ fun ChatScreen(
                     onReconnect = onReconnect,
                     onCloseDrawer = { scope.launch { drawerState.close() } },
                     onToggleFavorite = onToggleFavorite,
-                    isFavorite = isFavorite
+                    isFavorite = isFavorite,
+                    onOpenActiveChat = onOpenActiveChat
                 )
             }
         }

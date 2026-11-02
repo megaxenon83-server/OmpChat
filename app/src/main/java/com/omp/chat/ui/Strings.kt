@@ -18,6 +18,7 @@ class Strings(val lang: String) {
     val search get() = s("Søk", "Search")
     val searchChats get() = s("Søk i samtaler", "Search chats")
     val settings get() = s("Innstillinger", "Settings")
+    val goToActiveChat get() = s("Gå til aktiv PC-chat", "Go to active PC chat")
     val projects get() = s("Prosjekter", "Projects")
     val project get() = s("Prosjekt", "Project")
     val allProjects get() = s("Alle prosjekter", "All projects")

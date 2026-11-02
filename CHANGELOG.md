@@ -1,42 +1,43 @@
-# OmpChat CHANGELOG.md - Utført endringer
+# OmpChat CHANGELOG.md - Released changes
 
 
-### 2.9.55 - Heft enhver melding + pinnet-meldinger liste (02.11.2026)
+### 2.9.56 - Go to active PC chat in sidebar (2026-11-02)
 
-**Android APK 2.9.55 (kode 80)**
-- **Heft hvilken som helst melding** - pushpin-knapp på hver enkelt meldingboble (bruker og assistent)
-- **Pinnet-meldinger liste** - trykk på ressursmonitor-chippen i header for å se alle heftede meldinger
-- **Klikk på pinnet melding** i listen for å hoppe direkte til den i chatten
-- **Pinnede meldinger vises øverst** i chatlisten automatisk
-- Samme diskrete stil (32dp ikon-knapp) som de andre knappene
-- SHA-256: 81E0C5C3AC7225025ECA22325FE88D08D9DDD9949295E036F0D3766058074704
+**Android APK 2.9.56 (code 81)**
+- **New button: Go to active PC chat** in sidebar drawer
+- Same discreet style (32dp icon chip) as the other sidebar chips
+- Tap to open the active chat on the PC
+- Tap once to open the active conversation from the sidebar
+- SHA-256: 94929B556D6261EDA57DC059AE4CEB61047AB57BD3EE92566927793FDECB44F7
 
-### 2.9.54 - Heft meldinger i chat-header (02.11.2026)
+### 2.9.55 - Pin any message + pinned messages list (2026-11-02)
 
-**Android APK 2.9.54 (kode 79)**
-- **Ny funksjon: Heft meldinger** - diskret pushpin-knapp i chat-header ved siden av eksport-chat-knappen
-- Samme diskrete stil (32dp ikon-knapp uten tekst) som de andre knappene
-- Trykk for å hefte/opp-hefte den siste meldingen i chatten
-- Heftede meldinger kan løsnes ved å trykke igjen
-- Slå av/på sammen med ressursmonitor-innstillingen (PC-ressursmonitor i Settings)
+### 2.9.54 - Pin messages in header (2026-11-02)
+
+**Android APK 2.9.54 (code 79)**
+- **Pin messages** - discreet pushpin icon button in chat header next to export chat chip
+- Same discreet style (32dp icon chip without text) as the other chips
+- Tap to pin/unpin the latest message in chat
+- Pinned messages can be unpinning by tapping again
+- Toggle with resource monitor setting (PC Resource Monitor in Settings)
 - SHA-256: 34B071E0545254BE154F2DC2F39FC17753405B019D43342DE33381DF96C1E654
 
-### 2.9.53 - Eksport-chat knapp i header (02.11.2026)
+### 2.9.53 - Export chat chip in header (2026-11-02)
 
-**Android APK 2.9.53 (kode 78)**
-- **Ny funksjon: Eksport-chat-knapp** i chat-header ved siden av ressursmonitor-knappen
-- Samme diskrete stil (32dp ikon-knapp uten tekst) som ressursmonitor-knappen
-- Nedtrekksmeny med valg: "Siste 3 chats", "Siste 5 chats", "Siste 10 chats"
-- Kopierer valgte chats til utklipp som formatertekst (tidsstempel + rolle + melding)
-- Brukbar for å lime inn samtaler i andre apper
-- Slå av/på sammen med ressursmonitor-innstillingen (resourceMonitorEnabled)
+**Android APK 2.9.53 (code 78)**
+- **Export chat chip** in chat header next to resource monitor chip
+- Same discreet style (32dp icon chip without text) as resource monitor chip
+- Dropdown menu with choices: "Last 3 chats", "Last 5 chats", "Last 10 chats"
+- Copies selected chats to clipboard as formatted text (timestamp + role + message)
+- Useful for pasting conversations into other apps
+- Toggle with resource monitor setting (resourceMonitorEnabled)
 - SHA-256: 05AE91FF5ABE333CB5411C1951568118CFEC2BE7E3E864AC5434AA2975069CF4
 
-### 2.9.52 / Installer 3.2.1 - Resource monitor fix + bridge /api/resources (02.11.2026)
+### 2.9.52 / Installer 3.2.1 - Resource monitor fix + bridge /api/resources (2026-11-02)
 
-**Android APK 2.9.52 (kode 77)**
-- **Ressursmonitor (PC-ressursmonitor):** Popup rendres via Compose Popup (overlay) — chip flytter seg ikke lenger ved trykk. Chip kaller loadResources() ved åpning, viser ekte CPU/RAM/GPU-data istedenfor å henge på 'Laster ressurser...'. On-demand lasting ved tapping (ut over 30s-polling). Feilsøkningslogg: DEBUG-flagg i ResourceMonitor.kt (tag 'OmpChat').
-- **Bridge-krav:** Krever omp-bridge 2.9.9 med /api/resources-endepunkt. På PC-er med eldre bridge vil ressursmonitoren ikke vise data.
+**Android APK 2.9.52 (code 77)**
+- **Resource Monitor (PC Resource Monitor):** Popup rendered via Compose Popup (overlay) — chip does not move when tapped. Chip calls loadResources() on open, shows real CPU/RAM/GPU data instead of hanging on 'Loading resources...'. On-demand loading via tapping (beyond 30s polling). Debug log: DEBUG flag in ResourceMonitor.kt (tag 'OmpChat').
+- **Bridge requirement:** Requires omp-bridge 2.9.9 with /api/resources endpoint. On PCs with older bridge, resource monitor will not show data.
 - SHA-256: DE179083D744C054EF8A52ED00F89B9788E2C7FD51AF0752869DCDDE3274152F
 
 **NimayOMP Installer 3.2.1 (Windows bridge)**
