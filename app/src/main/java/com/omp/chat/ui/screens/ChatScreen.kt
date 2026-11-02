@@ -142,6 +142,7 @@ fun ChatScreen(
     onOpenTerminal: () -> Unit = {},
     onOpenGit: () -> Unit = {},
     resourceMonitorEnabled: Boolean = false,
+    onLoadResources: () -> Unit = {},
     onReconnect: () -> Unit,
     onReloadModels: () -> Unit,
     onClearTerminal: () -> Unit,
@@ -356,6 +357,7 @@ fun ChatScreen(
                 ResourceMonitorChip(
                     resources = state.resources,
                     enabled = resourceMonitorEnabled,
+                    onRefresh = onLoadResources,
                     modifier = Modifier.padding(end = 4.dp)
                 )
 

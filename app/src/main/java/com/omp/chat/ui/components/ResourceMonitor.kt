@@ -13,19 +13,26 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import com.omp.chat.data.PcResources
 
 /**
  * Diskret ressursmonitor-knapp for chat-header.
  * Viser et lite ikon uten tekst. Ved trykk vises popup med CPU/RAM/GPU.
+ * Popup rendres i eget overlay-vindu (Popup) slik at chippen holder 32dp
+ * og header-layouten ikke forskyves ved trykk.
  */
 @Composable
 fun ResourceMonitorChip(
     resources: PcResources?,
     enabled: Boolean,
+    onRefresh: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     if (!enabled) return
@@ -33,8 +40,13 @@ fun ResourceMonitorChip(
     var showPopup by remember { mutableStateOf(false) }
 
     Box(modifier = modifier) {
+        // Diskret ikon-knapp (32dp, fast størrelse)
         Surface(
-            onClick = { showPopup = !showPopup },
+            onClick = {
+                val opening = !showPopup
+                showPopup = opening
+                if (opening) onRefresh()
+            },
             shape = CircleShape,
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             modifier = Modifier.size(32.dp)
@@ -49,40 +61,45 @@ fun ResourceMonitorChip(
             }
         }
 
-        // Popup med detaljer
+        // Popup med detaljer - rendres i overlay, påvirker ikke layout
         if (showPopup) {
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                shadowElevation = 8.dp,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .offset(y = 40.dp)
-                    .width(200.dp)
+            val density = LocalDensity.current
+            Popup(
+                alignment = Alignment.TopEnd,
+                offset = IntOffset(0, with(density) { 40.dp.roundToPx() }),
+                onDismissRequest = { showPopup = false },
+                properties = PopupProperties(focusable = true)
             ) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (resources == null) {
-                        Text("Laster ressurser...", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    } else {
-                        ResourceRow("CPU", resources.cpuPercent, "${resources.cpuCores} kjerner")
-                        ResourceRow("RAM", resources.ramPercent, "${formatBytes(resources.ramUsedBytes)} / ${formatBytes(resources.ramTotalBytes)}")
-                        if (resources.gpuName.isNotBlank()) {
-                            ResourceRow("GPU", resources.gpuPercent, resources.gpuName.take(20))
-                        }
-                        if (resources.gpuMemoryTotalBytes > 0) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    shadowElevation = 8.dp,
+                    modifier = Modifier.width(200.dp)
+                ) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (resources == null) {
+                            Text("Laster ressurser...", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else {
+                            ResourceRow("CPU", resources.cpuPercent, "${resources.cpuCores} kjerner")
+                            ResourceRow("RAM", resources.ramPercent, "${formatBytes(resources.ramUsedBytes)} / ${formatBytes(resources.ramTotalBytes)}")
+                            if (resources.gpuName.isNotBlank()) {
+                                ResourceRow("GPU", resources.gpuPercent, resources.gpuName.take(20))
+                            }
+                            if (resources.gpuMemoryTotalBytes > 0) {
+                                Text(
+                                    "GPU-minne: ${formatBytes(resources.gpuMemoryUsedBytes)} / ${formatBytes(resources.gpuMemoryTotalBytes)}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 9.sp
+                                )
+                            }
                             Text(
-                                "GPU-minne: ${formatBytes(resources.gpuMemoryUsedBytes)} / ${formatBytes(resources.gpuMemoryTotalBytes)}",
+                                "Oppdatert: ${formatTime(resources.timestamp)}",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 9.sp
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                fontSize = 8.sp
                             )
                         }
-                        Text(
-                            "Oppdatert: ${formatTime(resources.timestamp)}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                            fontSize = 8.sp
-                        )
                     }
                 }
             }

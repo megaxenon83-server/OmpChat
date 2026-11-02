@@ -205,6 +205,7 @@ fun AppRoot(
                                 onOpenTerminal = { screen = Screen.Terminal },
                                 onOpenGit = { screen = Screen.Git },
                                 resourceMonitorEnabled = settings.resourceMonitorEnabled,
+                                onLoadResources = { viewModel.repository.loadResources() },
                                 onReconnect = { viewModel.repository.connect() },
                                 onReloadModels = { viewModel.reloadModels() },
                                 onClearTerminal = { viewModel.clearTerminal() },

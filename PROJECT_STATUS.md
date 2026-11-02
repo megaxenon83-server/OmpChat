@@ -976,3 +976,26 @@ Fixed: Changed source offset from cipher.iv.size to 0.
 - index.html updated
 - Nginx reloaded
 - GitHub pushed
+
+## 2.9.50 — 2026-11-02
+
+**Fix: resource monitor button layout shift + on-demand load**
+
+### Bugs fixed
+1. Layout shift: popup Surface was a child of the same Box as the 32dp chip, so the Box measured 200dp wide and pushed the header Row. Fixed by rendering the popup via Compose Popup (overlay window); chip stays 32dp.
+2. On-demand load: chip now triggers loadResources() on open, so tapping early (before first 30s poll completes) shows "Laster ressurser..." then updates to real data instead of staying empty.
+
+### Changed files
+- app/src/main/java/com/omp/chat/ui/components/ResourceMonitor.kt - Popup overlay, onRefresh callback
+- app/src/main/java/com/omp/chat/ui/screens/ChatScreen.kt - onLoadResources param
+- app/src/main/java/com/omp/chat/ui/AppRoot.kt - wired loadResources
+- app/build.gradle - version 2.9.50 (code 75)
+
+### APK
+- OmpChat-2.9.50.apk (13,466,096 B, SHA-256: C032D6569BDFC961C8B857FED2C5BA88EF2331B837BB1E0470CB82AF23493770)
+
+### Published
+- APK uploaded to chat.nimay.net
+- update.json updated (2.9.50, code 75)
+- index.html updated
+- Nginx reloaded
