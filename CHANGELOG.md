@@ -1,6 +1,19 @@
 # OmpChat CHANGELOG.md - Utført endringer
 
 
+### 2.9.52 / Installer 3.2.0 - Resource monitor fix + bridge /api/resources (02.11.2026)
+
+**Android APK 2.9.52 (kode 77)**
+- **Ressursmonitor (PC-ressursmonitor):** Popup rendres via Compose Popup (overlay) — chip flytter seg ikke lenger ved trykk. Chip kaller loadResources() ved åpning, viser ekte CPU/RAM/GPU-data istedenfor å henge på 'Laster ressurser...'. On-demand lasting ved tapping (ut over 30s-polling). Feilsøkningslogg: DEBUG-flagg i ResourceMonitor.kt (tag 'OmpChat').
+- **Bridge-krav:** Krever omp-bridge 2.9.9 med /api/resources-endepunkt. På PC-er med eldre bridge vil ressursmonitoren ikke vise data.
+- SHA-256: DE179083D744C054EF8A52ED00F89B9788E2C7FD51AF0752869DCDDE3274152F
+
+**NimayOMP Installer 3.2.0 (Windows bridge)**
+- **Bridge:** omp-bridge.mjs oppdatert med /api/resources-endepunkt (versjon 2.9.9). Kun bridge-koden er endret i installeren — ingen APK-endring i installer-pakken.
+- SHA-256: E35E13925DDC0D5FD2B03CDED1A944523FEE57DADC415C6F32F5DCBCF570D51F
+
+**GitHub release:** https://github.com/megaxenon83-server/OmpChat/releases/tag/v3.2.0
+
 ### 2.7.1 - Filbehandler stabilisering og redesign (30.10.2026)
 - **PC-listing reparert:** PC-fanen starter på rot/drevvisning med hurtigplasser (Hjem, Skrivebord, Dokumenter, …), viser Windows-stasjoner og Linux-baner, ekte feil, lagringsinfo, «prøv igjen» og ingen falske filer. Nettverkskall kjøres på Dispatchers.IO.
 - **Profesjonell kompakt UI:** Material Files/Solid Explorer-inspirert toppfelt (tilbake, tittel, søk, liste/rutenett, meny), Telefon/PC-velger med tilkoblingsstatus, brødsmuler + opp, hurtigtilgang, kompakte rader med ikoner/miniatyrer, diskret valgmarkering.

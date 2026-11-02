@@ -7,7 +7,7 @@
 ; ---------------------------------------------------------------------------
 
 #define AppName "Nimay OMP"
-#define AppVersion "2.9.1"
+#define AppVersion "3.2.0"
 #define AppPublisher "Nimay"
 #define AppURL "https://nimay.net"
 #define Payload "build\payload"
