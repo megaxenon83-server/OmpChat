@@ -1,16 +1,11 @@
 package com.omp.chat.ui.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -38,19 +33,20 @@ fun ResourceMonitorChip(
     var showPopup by remember { mutableStateOf(false) }
 
     Box(modifier = modifier) {
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape)
-                .clickable { showPopup = !showPopup },
-            contentAlignment = Alignment.Center
+        Surface(
+            onClick = { showPopup = !showPopup },
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = Modifier.size(32.dp)
         ) {
-            Icon(
-                Icons.Default.Speed,
-                contentDescription = "PC-ressurser",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(18.dp)
-            )
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                Icon(
+                    Icons.Default.Speed,
+                    contentDescription = "PC-ressurser",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
 
         // Popup med detaljer
@@ -61,7 +57,7 @@ fun ResourceMonitorChip(
                 shadowElevation = 8.dp,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .offset(y = 36.dp)
+                    .offset(y = 40.dp)
                     .width(200.dp)
             ) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -69,7 +65,7 @@ fun ResourceMonitorChip(
                         Text("Laster ressurser...", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else {
                         ResourceRow("CPU", resources.cpuPercent, "${resources.cpuCores} kjerner")
-                        ResourceRow("RAM", resources.ramPercent, formatBytes(resources.ramUsedBytes) + " / " + formatBytes(resources.ramTotalBytes))
+                        ResourceRow("RAM", resources.ramPercent, "${formatBytes(resources.ramUsedBytes)} / ${formatBytes(resources.ramTotalBytes)}")
                         if (resources.gpuName.isNotBlank()) {
                             ResourceRow("GPU", resources.gpuPercent, resources.gpuName.take(20))
                         }
@@ -119,7 +115,7 @@ private fun formatBytes(bytes: Long): String {
 }
 
 private fun formatTime(timestamp: Long): String {
-    if (timestamp <= 0) return "Ã¢â‚¬â€"
+    if (timestamp <= 0) return "—"
     val sdf = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
     return sdf.format(java.util.Date(timestamp))
 }
