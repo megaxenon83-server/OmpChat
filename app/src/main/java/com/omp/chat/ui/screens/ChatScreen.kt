@@ -96,6 +96,7 @@ import com.omp.chat.ui.LocalStrings
 import com.omp.chat.ui.components.TokenIndicator
 import com.omp.chat.ui.components.ResourceMonitorChip
 import com.omp.chat.ui.components.ExportChatChip
+import com.omp.chat.ui.components.PinMessageChip
 import com.omp.chat.ui.components.ApprovalSheet
 import com.omp.chat.ui.components.Attachment
 import com.omp.chat.ui.components.AttachSheet
@@ -146,6 +147,8 @@ fun ChatScreen(
     onLoadResources: () -> Unit = {},
     exportChatEnabled: Boolean = false,
     onExportChat: (Int) -> Unit = {},
+    pinMessagesEnabled: Boolean = false,
+    onTogglePinMessage: (String) -> Unit = {},
     onReconnect: () -> Unit,
     onReloadModels: () -> Unit,
     onClearTerminal: () -> Unit,
@@ -368,6 +371,18 @@ fun ChatScreen(
                 ExportChatChip(
                     strings = strings,
                     onExport = onExportChat,
+                    onToast = onToast,
+                    modifier = Modifier.padding(end = 4.dp)
+                )
+
+                // Pinne-melding - diskret chip i header
+                val latestMessageId = state.messages.lastOrNull()?.id ?: ""
+                val isLatestPinned = state.pinnedMessageIds.contains(latestMessageId)
+                PinMessageChip(
+                    strings = strings,
+                    messageId = latestMessageId,
+                    isPinned = isLatestPinned,
+                    onTogglePin = onTogglePinMessage,
                     onToast = onToast,
                     modifier = Modifier.padding(end = 4.dp)
                 )

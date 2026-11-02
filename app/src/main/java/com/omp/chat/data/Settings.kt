@@ -33,7 +33,8 @@ data class AppSettings(
     val gotifyServer: String = "",
     val gotifyToken: String = "",
     val terminalFontSize: Int = 14,
-    val resourceMonitorEnabled: Boolean = true
+    val resourceMonitorEnabled: Boolean = true,
+    val pinMessagesEnabled: Boolean = true
 )
 
 /**
@@ -90,7 +91,8 @@ class SettingsStore(context: Context) {
         gotifyServer = prefs.getString(KEY_GOTIFY_SERVER, "") ?: "",
         gotifyToken = prefs.getString(KEY_GOTIFY_TOKEN, "") ?: "",
         terminalFontSize = prefs.getInt(KEY_TERMINAL_FONT_SIZE, 14),
-        resourceMonitorEnabled = prefs.getBoolean(KEY_RESOURCE_MONITOR, true)
+        resourceMonitorEnabled = prefs.getBoolean(KEY_RESOURCE_MONITOR, true),
+        pinMessagesEnabled = prefs.getBoolean(KEY_PIN_MESSAGES, true)
     )
 
     fun saveConnection(baseUrl: String, token: String) {
@@ -211,6 +213,11 @@ class SettingsStore(context: Context) {
         refresh()
     }
 
+    fun setPinMessagesEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_PIN_MESSAGES, enabled).apply()
+        refresh()
+    }
+
     fun rememberLast(cwd: String, sessionFile: String?) {
         prefs.edit()
             .putString(KEY_LAST_CWD, cwd)
@@ -262,6 +269,7 @@ class SettingsStore(context: Context) {
         private const val KEY_GOTIFY_TOKEN = "gotify_token"
         private const val KEY_TERMINAL_FONT_SIZE = "terminal_font_size"
         private const val KEY_RESOURCE_MONITOR = "resource_monitor_enabled"
+        private const val KEY_PIN_MESSAGES = "pin_messages_enabled"
 
         /** Accepts `omp://host:port?token=...`, `omp2://…`, `ompchat://…` and plain URLs. */
         fun normalizeBaseUrl(raw: String): String {

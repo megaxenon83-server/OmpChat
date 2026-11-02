@@ -210,6 +210,10 @@ fun AppRoot(
                                 onExportChat = { count ->
                                     viewModel.repository.exportLastNChats(count)
                                 },
+                                pinMessagesEnabled = settings.pinMessagesEnabled,
+                                onTogglePinMessage = { messageId ->
+                                    viewModel.repository.togglePinMessage(messageId)
+                                },
                                 onReconnect = { viewModel.repository.connect() },
                                 onReloadModels = { viewModel.reloadModels() },
                                 onClearTerminal = { viewModel.clearTerminal() },
@@ -268,7 +272,8 @@ fun AppRoot(
                                 onGotifySave = { e, u, t -> viewModel.saveGotifyConfig(e, u, t) },
                                 onGotifyTest = { viewModel.testGotify() },
                                 onOpenGotify = { screen = Screen.Gotify },
-                                onResourceMonitorEnabled = { viewModel.settings.setResourceMonitorEnabled(it) }
+                                onResourceMonitorEnabled = { viewModel.settings.setResourceMonitorEnabled(it) },
+                                onPinMessagesEnabled = { viewModel.settings.setPinMessagesEnabled(it) }
                             )
 
                             Screen.Voice -> VoiceCallScreen(

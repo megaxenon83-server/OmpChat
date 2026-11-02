@@ -43,7 +43,8 @@ data class RepoState(
     val approvalMode: String = "",
     val terminalEnabled: Boolean = false,
     val bridgeVersion: String = "",
-    val voiceEngines: VoiceEngineList? = null
+    val voiceEngines: VoiceEngineList? = null,
+    val pinnedMessageIds: Set<String> = emptySet()
 )
 
 /**
@@ -267,6 +268,17 @@ class ChatRepository(private val settings: SettingsStore) {
         val clipboard = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         val clip = ClipData.newPlainText("OmpChat-eksport", text)
         clipboard.setPrimaryClip(clip)
+    }
+
+    /** Pinner eller opp-pinner en melding ved messageId. */
+    fun togglePinMessage(messageId: String) {
+        val current = _state.value.pinnedMessageIds
+        val newIds = if (current.contains(messageId)) {
+            current - messageId
+        } else {
+            current + messageId
+        }
+        _state.update { it.copy(pinnedMessageIds = newIds) }
     }
 
     /** Start periodisk polling av PC-ressurser (hvert 5. sekund). */

@@ -112,7 +112,8 @@ fun SettingsScreen(
     onGotifySave: (Boolean, String, String) -> Unit = { _, _, _ -> },
     onGotifyTest: () -> Boolean = { false },
     onOpenGotify: () -> Unit = {},
-    onResourceMonitorEnabled: (Boolean) -> Unit = {}
+    onResourceMonitorEnabled: (Boolean) -> Unit = {},
+    onPinMessagesEnabled: (Boolean) -> Unit = {}
 ) {
     val strings = LocalStrings.current
     val scope = rememberCoroutineScope()
@@ -342,6 +343,8 @@ fun SettingsScreen(
                 HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.6f))
                 // Ressursmonitor
                 SwitchRow("PC-ressursmonitor", "Vis CPU, RAM og GPU i chatten", settings.resourceMonitorEnabled, onResourceMonitorEnabled)
+                // Heft meldinger
+                SwitchRow("Heft meldinger", "Heft viktige meldinger øverst i chatten", settings.pinMessagesEnabled, onPinMessagesEnabled)
                 Row(
                     Modifier.fillMaxWidth().padding(vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically

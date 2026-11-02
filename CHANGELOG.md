@@ -1,6 +1,16 @@
 # OmpChat CHANGELOG.md - Utført endringer
 
 
+### 2.9.54 - Heft meldinger i chat-header (02.11.2026)
+
+**Android APK 2.9.54 (kode 79)**
+- **Ny funksjon: Heft meldinger** - diskret pushpin-knapp i chat-header ved siden av eksport-chat-knappen
+- Samme diskrete stil (32dp ikon-knapp uten tekst) som de andre knappene
+- Trykk for å hefte/opp-hefte den siste meldingen i chatten
+- Heftede meldinger kan løsnes ved å trykke igjen
+- Slå av/på sammen med ressursmonitor-innstillingen (PC-ressursmonitor i Settings)
+- SHA-256: 34B071E0545254BE154F2DC2F39FC17753405B019D43342DE33381DF96C1E654
+
 ### 2.9.53 - Eksport-chat knapp i header (02.11.2026)
 
 **Android APK 2.9.53 (kode 78)**
