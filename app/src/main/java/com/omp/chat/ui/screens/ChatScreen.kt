@@ -89,6 +89,7 @@ import androidx.compose.ui.unit.dp
 import com.omp.chat.data.ChatMessage
 import com.omp.chat.data.ChatRepository
 import com.omp.chat.data.ModelInfo
+import com.omp.chat.data.ChatRepository.Upload
 import com.omp.chat.data.RepoState
 import com.omp.chat.data.TodoPhase
 import com.omp.chat.data.UiRequest
@@ -206,12 +207,10 @@ fun ChatScreen(
     var autoFollow by remember { mutableStateOf(true) }
 
     /** Meldinger sortert med pinnede øverst, ellers kronologisk. */
-    val displayMessages by remember {
-        derivedStateOf {
-            state.messages.sortedWith(
-                compareBy({ it.id in state.pinnedMessageIds }, { it.timestamp })
-            ).reversed()
-        }
+    val displayMessages = remember(state.messages, state.pinnedMessageIds) {
+        state.messages.sortedWith(
+            compareBy({ it.id in state.pinnedMessageIds }, { it.timestamp })
+        ).reversed()
     }
 
     /** Scroller til en bestemt melding i listen. */
