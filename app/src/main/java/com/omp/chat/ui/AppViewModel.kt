@@ -540,15 +540,56 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun wakeViaDocker(profile: PcProfile): Boolean = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         try {
-            val url = profile.dockerWolUrl.trimEnd('/') + "/pcs/" + profile.id + "/wake"
-            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            val base = profile.dockerWolUrl.trimEnd('/')
+            val id = profile.id
+            // Prøv wake først.
+            var conn = java.net.URL("$base/pcs/$id/wake").openConnection() as java.net.HttpURLConnection
             conn.requestMethod = "POST"
             conn.connectTimeout = 8000
             conn.readTimeout = 8000
             if (profile.dockerWolToken.isNotBlank()) {
                 conn.setRequestProperty("Authorization", "Bearer " + profile.dockerWolToken)
             }
-            conn.responseCode in 200..299
+            var code = conn.responseCode
+            conn.disconnect()
+            if (code == 404) {
+                // PC-en er ikke registrert i tjenesten. Registrer den automatisk
+                // med profilen vi allerede har, slik at brukeren slipper manuell ID.
+                val host = profile.baseUrl.substringAfter("://").substringBefore(":").ifBlank { profile.baseUrl }
+                val body = org.json.JSONObject().apply {
+                    put("id", id)
+                    put("name", profile.name.ifBlank { "PC" })
+                    put("mac", profile.mac)
+                    put("ip", host)
+                    put("host", host)
+                    put("port", 7777)
+                    put("broadcast", profile.wolBroadcast.ifBlank { "255.255.255.255" })
+                    put("wolPort", profile.wolPort)
+                }
+                conn = java.net.URL("$base/pcs").openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.connectTimeout = 8000
+                conn.readTimeout = 8000
+                conn.setRequestProperty("Content-Type", "application/json")
+                if (profile.dockerWolToken.isNotBlank()) {
+                    conn.setRequestProperty("Authorization", "Bearer " + profile.dockerWolToken)
+                }
+                conn.doOutput = true
+                conn.outputStream.use { it.write(body.toString().toByteArray()) }
+                conn.responseCode // consume
+                conn.disconnect()
+                // Prøv wake på nytt.
+                conn = java.net.URL("$base/pcs/$id/wake").openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.connectTimeout = 8000
+                conn.readTimeout = 8000
+                if (profile.dockerWolToken.isNotBlank()) {
+                    conn.setRequestProperty("Authorization", "Bearer " + profile.dockerWolToken)
+                }
+                code = conn.responseCode
+                conn.disconnect()
+            }
+            code in 200..299
         } catch (e: Throwable) {
             false
         }
