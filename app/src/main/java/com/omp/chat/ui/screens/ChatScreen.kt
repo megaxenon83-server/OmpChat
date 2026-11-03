@@ -209,8 +209,9 @@ fun ChatScreen(
     /** Meldinger sortert med pinnede øverst, ellers kronologisk. */
     val displayMessages = remember(state.messages, state.pinnedMessageIds) {
         state.messages.sortedWith(
-            compareBy({ it.id in state.pinnedMessageIds }, { it.timestamp })
-        ).reversed()
+            compareByDescending<ChatMessage> { it.id in state.pinnedMessageIds }
+                .thenBy { it.timestamp }
+        )
     }
 
     /** Scroller til en bestemt melding i listen. */
