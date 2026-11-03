@@ -7,7 +7,7 @@
 ; ---------------------------------------------------------------------------
 
 #define AppName "Nimay OMP"
-#define AppVersion "3.2.3"
+#define AppVersion "3.2.5"
 #define AppPublisher "Nimay"
 #define AppURL "https://nimay.net"
 #define Payload "build\payload"
@@ -49,6 +49,7 @@ VersionInfoProductVersion={#AppVersion}
 
 [Languages]
 Name: "norwegian"; MessagesFile: "compiler:Languages\Norwegian.isl"
+Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Types]
 Name: "full"; Description: "Full installasjon - alle norske talemotorer og verktoy"
@@ -95,7 +96,7 @@ Name: "{group}\Del APK med telefonen"; Filename: "{app}\Del-APK.cmd"; WorkingDir
 Name: "{group}\Nimay OMP-mappen"; Filename: "{app}"
 Name: "{group}\Avinstaller Nimay OMP"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\Nimay OMP"; Filename: "{app}\Del-APK.cmd"; WorkingDir: "{app}"; Tasks: desktopicon
-Name: "{userstartup}\Nimay OMP Bridge"; Filename: "{app}\Start-OMP-Bridge.cmd"; WorkingDir: "{app}"; Tasks: autostart
+Name: "{userstartup}\Nimay OMP Bridge"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\tools\start-bridge-hidden.vbs"""; WorkingDir: "{app}\tools"; Tasks: autostart
 
 [Run]
 ; 1. Install selected voice engines (real downloads, real verification)
@@ -518,12 +519,19 @@ end;
 
 procedure InitializeWizard;
 begin
+  Log('InitializeWizard: oppretter egendefinerte sider');
+
   DownloadPage := CreateDownloadPage('Laster ned forutsetninger',
     'Noen komponenter mangler pa denne PC-en og lastes ned na.', nil);
   DownloadPage.ShowBaseNameInsteadOfUrl := True;
+  Log('InitializeWizard: DownloadPage opprettet, ID=' + IntToStr(DownloadPage.ID));
 
-  MobilePage := CreateCustomPage(wpInstalling, 'Mobilen',
+  { wpReady er den siste veiviser-siden for installeringen starter.
+    wpInstalling er installasjonsfasen og er IKKE en gyldig AfterID for
+    en veiviser-side som opprettes i InitializeWizard. }
+  MobilePage := CreateCustomPage(wpReady, 'Mobilen',
     'Skann en av kodene med telefonen. Begge virker pa samme nettverk (LAN eller Tailscale).');
+  Log('InitializeWizard: MobilePage opprettet, ID=' + IntToStr(MobilePage.ID));
 
   ApkCaption := TNewStaticText.Create(MobilePage.Surface);
   ApkCaption.Parent := MobilePage.Surface;
