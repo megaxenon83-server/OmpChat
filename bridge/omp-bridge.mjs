@@ -23,7 +23,7 @@ import crypto from "node:crypto";
 import { spawn, exec, execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const VERSION = "2.9.12";
+const VERSION = "2.9.13";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 // Resource monitoring state
@@ -105,10 +105,20 @@ async function getResources() {
 const OMP_BIN = (() => {
   // 1. Respect OMP_BIN environment variable
   if (process.env.OMP_BIN) return process.env.OMP_BIN;
-  // 2. Search PATH for omp / omp.exe
+  // 2. Bun-based OMP (run with bun) - preferred over the broken bun shim
+  const bunCliJs = path.join(os.homedir(), ".bun", "install", "global", "node_modules", "@oh-my-pi", "pi-coding-agent", "dist", "cli.js");
+  try {
+    if (fs.existsSync(bunCliJs)) {
+      const bunExe = process.platform === "win32"
+        ? path.join(os.homedir(), "AppData", "Local", "Microsoft", "WinGet", "Packages", "Oven-sh.Bun_Microsoft.Winget.Source_8wekyb3d8bbwe", "bun-windows-x64", "bun.exe")
+        : "/usr/local/bin/bun";
+      if (fs.existsSync(bunExe)) return bunExe + "|" + bunCliJs; // special format: exe|entry
+    }
+  } catch { /* ignore */ }
+  // 3. Search PATH for omp / omp.exe / bun
   const pathEnv = process.env.PATH || "";
   const pathDirs = pathEnv.split(path.delimiter).filter(Boolean);
-  const ompNames = process.platform === "win32" ? ["omp.exe", "omp.cmd", "omp.bat"] : ["omp"];
+  const ompNames = process.platform === "win32" ? ["omp.exe", "omp.cmd", "omp.bat", "omp"] : ["omp"];
   for (const dir of pathDirs) {
     for (const name of ompNames) {
       const candidate = path.join(dir, name);
@@ -117,9 +127,10 @@ const OMP_BIN = (() => {
       } catch { /* ignore */ }
     }
   }
-  // 3. Common npm global install locations
+  // 4. Common npm global install locations
   const npmGlobalCandidates = [
     path.join(os.homedir(), "AppData", "Roaming", "npm", "omp.exe"),
+    path.join(os.homedir(), "AppData", "Roaming", "npm", "omp.cmd"),
     path.join(os.homedir(), "AppData", "Roaming", "npm", "omp"),
     path.join(os.homedir(), ".npm-global", "bin", "omp.exe"),
     path.join(os.homedir(), ".npm-global", "bin", "omp"),
@@ -131,9 +142,18 @@ const OMP_BIN = (() => {
       if (fs.existsSync(candidate)) return candidate;
     } catch { /* ignore */ }
   }
-  // 4. Fall back to Bun install location
-  return path.join(os.homedir(), ".bun", "bin", "omp.exe");
+  // 5. Bun shim location (may be a shim that can't find node_modules)
+  const bunShim = path.join(os.homedir(), ".bun", "bin", "omp.exe");
+  try {
+    if (fs.existsSync(bunShim)) return bunShim;
+  } catch { /* ignore */ }
+  // 6. Last resort
+  return bunShim;
 })();
+// If OMP_BIN is "exe|entry", split it
+const _ompBinParts = OMP_BIN.includes("|") ? OMP_BIN.split("|") : [OMP_BIN, null];
+const OMP_BIN_EXEC = _ompBinParts[0];
+const OMP_BIN_ENTRY = _ompBinParts[1];
 const HOME = os.homedir();
 const SESSIONS_ROOT = path.join(HOME, ".omp", "agent", "sessions");
 const TRASH_ROOT = path.join(SESSIONS_ROOT, "_ompchat-trash");
@@ -789,14 +809,16 @@ class OmpRuntime {
       this.readyResolve = resolve;
       this.readyReject = reject;
     });
-    const args = ["--mode", "rpc", "--cwd", this.cwd];
+    const args = OMP_BIN_ENTRY
+      ? [OMP_BIN_ENTRY, "--mode", "rpc", "--cwd", this.cwd]
+      : ["--mode", "rpc", "--cwd", this.cwd];
     // OMP-moduser: always-ask | always-ask-cached | write | yolo ("write" =
     // spør ved sletting/store endringer; "yolo" = godkjenn alt automatisk).
     if (CONFIG.approvalMode && CONFIG.approvalMode !== "default") {
       args.push("--approval-mode", CONFIG.approvalMode);
     }
-    log("info", `spawning omp rpc for ${this.cwd} (approval=${CONFIG.approvalMode})`);
-    const child = spawn(OMP_BIN, args, {
+    log("info", `spawning omp rpc for ${this.cwd} (approval=${CONFIG.approvalMode}) using ${OMP_BIN_EXEC}`);
+    const child = spawn(OMP_BIN_EXEC, args, {
       cwd: this.cwd,
       env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0" },
       windowsHide: true,
@@ -2101,7 +2123,7 @@ async function handle(req, res) {
         return json(res, 200, {
           ok: true,
           version: VERSION,
-          omp: OMP_BIN,
+          omp: OMP_BIN_EXEC,
           approvalMode: CONFIG.approvalMode,
           allowBash: CONFIG.allowBash,
           runtimes: [...runtimes.values()].map((r) => ({
