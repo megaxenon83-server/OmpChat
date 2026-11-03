@@ -7,7 +7,7 @@
 ; ---------------------------------------------------------------------------
 
 #define AppName "Nimay OMP"
-#define AppVersion "3.2.5"
+#define AppVersion "3.2.6"
 #define AppPublisher "Nimay"
 #define AppURL "https://nimay.net"
 #define Payload "build\payload"
@@ -109,7 +109,7 @@ Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""N
 ; 4. Start the bridge so the phone page works right away. explorer.exe is used
 ;    on purpose: the installer is elevated, and the bridge must NOT run as
 ;    administrator because the phone can drive OMP through it.
-Filename: "{sys}\explorer.exe"; Parameters: """{app}\tools\start-bridge-hidden.vbs"""; StatusMsg: "Starter OMP Bridge..."; Flags: runhidden nowait; Tasks: startbridge or autostart
+Filename: "{win}\explorer.exe"; Parameters: """{app}\tools\start-bridge-hidden.vbs"""; StatusMsg: "Starter OMP Bridge..."; Flags: runhidden nowait; Tasks: startbridge or autostart
 
 [UninstallRun]
 Filename: "{app}\tools\powershell-run.cmd"; Parameters: "-File ""{app}\tools\stop-bridge.ps1"" -InstallDir ""{app}"""; Flags: runhidden; RunOnceId: "StopNimayServices"
