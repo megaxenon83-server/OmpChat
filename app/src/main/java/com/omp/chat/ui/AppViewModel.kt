@@ -595,7 +595,33 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun pcStatusOf(id: String): String = _pcStatus.value[id] ?: "unknown"
+    fun powerOffPc(profile: PcProfile, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                try {
+                    val url = profile.baseUrl.trimEnd('/') + "/api/poweroff"
+                    val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                    conn.requestMethod = "POST"
+                    conn.connectTimeout = 8000
+                    conn.readTimeout = 8000
+                    conn.setRequestProperty("Content-Type", "application/json")
+                    if (profile.token.isNotBlank()) {
+                        conn.setRequestProperty("Authorization", "Bearer " + profile.token)
+                    }
+                    conn.doOutput = true
+                    conn.outputStream.use { it.write("""{"confirm":true}""".toByteArray()) }
+                    val code = conn.responseCode
+                    val body = try { conn.inputStream.bufferedReader().readText() } catch (_: Exception) { "" }
+                    conn.disconnect()
+                    val ok = code in 200..299
+                    ok to (if (ok) body.ifBlank { "Slår av PC-en." } else body.ifBlank { "Kunne ikke slå av PC-en" })
+                } catch (e: Throwable) {
+                    false to (e.message ?: "Kunne ikke slå av PC-en")
+                }
+            }
+            onResult(result.first, result.second)
+        }
+    }
 
     fun updatePcStatus(id: String, status: String) {
         _pcStatus.value = _pcStatus.value + (id to status)

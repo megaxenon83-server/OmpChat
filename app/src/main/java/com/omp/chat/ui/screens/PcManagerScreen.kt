@@ -19,7 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.QrCode
+import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -133,7 +133,7 @@ fun PcManagerScreen(
                 Icon(Icons.Default.Refresh, contentDescription = "Test alle adresser", tint = NimayTextSecondary)
             }
             IconButton(onClick = onScan, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Default.QrCode, contentDescription = "Skann QR-kode", tint = NimayAccent)
+                Icon(Icons.Default.Add, contentDescription = "Skann QR-kode", tint = NimayAccent)
             }
             IconButton(onClick = { creating = true }, modifier = Modifier.size(40.dp)) {
                 Icon(Icons.Default.Add, contentDescription = "Legg til PC", tint = NimayAccent)
@@ -181,6 +181,11 @@ fun PcManagerScreen(
                             viewModel.wakePc(profile) { ok ->
                                 busyId = null
                                 toast = if (ok) "WOL-pakke sendt til ${profile.name}" else "Kunne ikke sende WOL-pakke"
+                            }
+                        },
+                        onPowerOff = {
+                            viewModel.powerOffPc(profile) { ok, msg ->
+                                toast = if (ok) "Slår av ${profile.name}" else msg
                             }
                         },
                         onEdit = { editing = profile },
@@ -234,9 +239,11 @@ private fun PcCard(
     busy: Boolean,
     onConnect: () -> Unit,
     onWake: () -> Unit,
+    onPowerOff: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
+    var showPowerOff by remember { mutableStateOf(false) }
     val statusColor = when (status) {
         "connected" -> NimayActive
         "pc_available" -> NimayAccent
@@ -317,6 +324,9 @@ private fun PcCard(
                 TextButton(onClick = onWake, enabled = profile.mac.isNotBlank() && !busy) {
                     Text("Vekk", color = NimayAccent, style = MaterialTheme.typography.labelSmall)
                 }
+                IconButton(onClick = { showPowerOff = true }) {
+                    Icon(Icons.Default.PowerSettingsNew, contentDescription = "Slå av", tint = NimayError)
+                }
                 IconButton(onClick = onEdit) {
                     Icon(Icons.Default.Edit, contentDescription = "Rediger", tint = NimayTextSecondary)
                 }
@@ -325,6 +335,22 @@ private fun PcCard(
                 }
             }
         }
+    }
+    if (showPowerOff) {
+        AlertDialog(
+            onDismissRequest = { showPowerOff = false },
+            title = { Text("Slå av PC?") },
+            text = { Text("Dette slår av ${profile.name} umiddelbart. Er du sikker?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showPowerOff = false
+                    onPowerOff()
+                }) { Text("Slå av", color = NimayError) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPowerOff = false }) { Text("Avbryt") }
+            }
+        )
     }
 }
 

@@ -2584,6 +2584,23 @@ async function handle(req, res) {
         return json(res, 200, { ok: true, ack, sessionFile: runtime.sessionFile });
       }
 
+      case "POST /api/poweroff": {
+        // Krev eksplisitt bekreftelse fra klienten.
+        const body = await readBody(req);
+        if (body.confirm !== true) return json(res, 400, { error: "Bekreftelse mangler" });
+        const cmd = IS_WINDOWS
+          ? "shutdown /s /t 5 /c \"OmpChat: slår av PC-en\""
+          : "shutdown -h now";
+        try {
+          exec(cmd, { windowsHide: true }, (error) => {
+            if (error) log("warn", `poweroff feilet: ${error.message}`);
+          });
+          return json(res, 200, { ok: true, message: "Slår av PC-en." });
+        } catch (error) {
+          return json(res, 500, { error: String(error?.message || error) });
+        }
+      }
+
       case "POST /api/abort": {
         const body = await readBody(req);
         if (!body.cwd) return json(res, 400, { error: "Mangler cwd" });
