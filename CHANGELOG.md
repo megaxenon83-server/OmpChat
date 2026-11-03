@@ -373,3 +373,6 @@ OMP-runtimeen for prosjektet appen brukte (`C:\Users\Megaxenon\documents\omp\upg
   og lang-tid transfer dialoger trenger fysisk telefontest (neste steg).
 
 
+
+## 2.9.60
+- Multi-PC reliability, sidebar redesign, active session indicators, cleanup/archive/trash, Bridge 2.9.12, installer 3.2.2.

@@ -203,3 +203,8 @@ MIT License — see [LICENSE](LICENSE) for details.
 3. Commit changes (`git commit -m "Add my feature"`)
 4. Push (`git push origin feature/my-feature`)
 5. Open a Pull Request
+
+## Latest release
+- Android: OmpChat 2.9.60 (versionCode 85)
+- Windows installer: NimayOMP-Setup 3.2.2 (Bridge 2.9.12)
+- Release: https://github.com/megaxenon83-server/OmpChat/releases/tag/v2.9.60
