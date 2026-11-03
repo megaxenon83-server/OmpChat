@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -40,6 +41,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -51,9 +53,11 @@ import com.omp.chat.ui.theme.NimayTextPrimary
 import com.omp.chat.ui.theme.NimayTextSecondary
 import com.omp.chat.ui.theme.NimayUserBubble
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,6 +66,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.omp.chat.data.CwdPath
+import com.omp.chat.data.FolderListing
 import com.omp.chat.data.Project
 import com.omp.chat.data.RepoState
 import com.omp.chat.data.SessionSummary
@@ -74,6 +80,7 @@ import com.omp.chat.ui.components.fileName
 import com.omp.chat.ui.components.relativeTime
 import com.omp.chat.ui.components.shortModel
 import java.util.Calendar
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -90,7 +97,8 @@ onOpenPcs: () -> Unit = {},
 onOpenTasks: () -> Unit = {},
 onOpenTerminal: () -> Unit = {},
 onOpenGit: () -> Unit = {},
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    onListFolders: suspend (String) -> FolderListing? = { null }
 ) {
     val strings = LocalStrings.current
     val scheme = MaterialTheme.colorScheme
@@ -98,6 +106,7 @@ onOpenGit: () -> Unit = {},
     var query by remember { mutableStateOf("") }
     var projectFilter by remember { mutableStateOf("") }
     var projectSheet by remember { mutableStateOf(false) }
+    var browseSheet by remember { mutableStateOf(false) }
     var showArchived by remember { mutableStateOf(false) }
 
     val sessions = remember(state.sessions, state.archivedSessions, query, projectFilter) {
@@ -391,7 +400,23 @@ onOpenGit: () -> Unit = {},
                 projectFilter = project.path
                 onNewChat(project.path)
             },
+            onBrowse = {
+                projectSheet = false
+                browseSheet = true
+            },
             onDismiss = { projectSheet = false }
+        )
+    }
+
+    if (browseSheet) {
+        FolderBrowserDialog(
+            initialPath = state.cwd.takeIf { CwdPath.isUsable(it) } ?: "",
+            onList = onListFolders,
+            onPick = { path ->
+                browseSheet = false
+                onNewChat(path)
+            },
+            onDismiss = { browseSheet = false }
         )
     }
 }
@@ -529,6 +554,7 @@ private fun ProjectSheet(
     projects: List<Project>,
     current: String,
     onPick: (Project) -> Unit,
+    onBrowse: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val strings = LocalStrings.current
@@ -552,6 +578,27 @@ private fun ProjectSheet(
                 modifier = Modifier.padding(horizontal = 20.dp)
             )
             Spacer(Modifier.height(8.dp))
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onBrowse() }
+                    .padding(horizontal = 20.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    OmpIcons.Folder,
+                    contentDescription = null,
+                    tint = NimayAccent,
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    strings.browseFolders,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = NimayAccent
+                )
+            }
             if (projects.isEmpty()) {
                 Text(
                     strings.noProjects,
@@ -565,8 +612,7 @@ private fun ProjectSheet(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
-                items(projects, key = { it.path }) { project ->
-                    val selected = current.equals(project.path, true)
+                items(projects, key = { it.path }) { project ->                    val selected = current.equals(project.path, true)
                     Row(
                         Modifier
                             .fillMaxWidth()
@@ -612,6 +658,120 @@ private fun ProjectSheet(
             Spacer(Modifier.height(10.dp))
         }
     }
+}
+
+@Composable
+private fun FolderBrowserDialog(
+    initialPath: String,
+    onList: suspend (String) -> FolderListing?,
+    onPick: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val strings = LocalStrings.current
+    val scheme = MaterialTheme.colorScheme
+    val scope = rememberCoroutineScope()
+    var current by remember { mutableStateOf(initialPath) }
+    var listing by remember { mutableStateOf<FolderListing?>(null) }
+    var loading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf("") }
+
+    suspend fun open(target: String) {
+        loading = true
+        error = ""
+        val result = runCatching { onList(target) }.getOrNull()
+        if (result == null) {
+            error = "Kunne ikke lese mappen på PC-en."
+        } else {
+            listing = result
+            current = result.path
+        }
+        loading = false
+    }
+
+    LaunchedEffect(Unit) { open(current) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = NimaySidebar,
+        title = { Text(strings.browseFolders, color = NimayTextPrimary) },
+        text = {
+            Column(Modifier.fillMaxWidth()) {
+                Text(
+                    text = current.ifBlank { "…" },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = NimayTextSecondary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(
+                        onClick = { scope.launch { open(listing?.parent ?: current) } },
+                        enabled = !loading && !listing?.parent.isNullOrBlank()
+                    ) {
+                        Text(strings.parentFolder, style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                when {
+                    loading -> Text("…", color = NimayTextSecondary)
+                    error.isNotBlank() -> Text(error, color = scheme.error, style = MaterialTheme.typography.labelSmall)
+                    else -> LazyColumn(
+                        modifier = Modifier.heightIn(max = 300.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        val dirs = listing?.dirs.orEmpty()
+                        if (dirs.isEmpty()) {
+                            item {
+                                Text(
+                                    "Ingen undermapper",
+                                    color = NimayTextSecondary,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                        }
+                        items(dirs, key = { it.path }) { dir ->
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { scope.launch { open(dir.path) } }
+                                    .padding(horizontal = 8.dp, vertical = 9.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    OmpIcons.Folder,
+                                    contentDescription = null,
+                                    tint = NimayAccent,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    dir.name,
+                                    color = NimayTextPrimary,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onPick(current) },
+                enabled = !loading && current.isNotBlank()
+            ) {
+                Text(strings.pickThis, color = NimayAccent)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(strings.cancel, color = NimayTextSecondary)
+            }
+        }
+    )
 }
 
 private fun groupSessions(

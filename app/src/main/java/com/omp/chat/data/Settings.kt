@@ -29,6 +29,7 @@ data class AppSettings(
     val voiceSpeed: Float = 1f,
     val voiceBargeIn: Boolean = true,
     val voiceAutoListen: Boolean = true,
+    val animatedActiveIndicator: Boolean = true,
     val gotifyEnabled: Boolean = false,
     val gotifyServer: String = "",
     val gotifyToken: String = "",
@@ -87,6 +88,7 @@ class SettingsStore(context: Context) {
         voiceSpeed = prefs.getFloat(KEY_VOICE_SPEED, 1f),
         voiceBargeIn = prefs.getBoolean(KEY_VOICE_BARGE_IN, true),
         voiceAutoListen = prefs.getBoolean(KEY_VOICE_AUTO_LISTEN, true),
+        animatedActiveIndicator = prefs.getBoolean(KEY_ANIMATED_ACTIVE, true),
         gotifyEnabled = prefs.getBoolean(KEY_GOTIFY_ENABLED, false),
         gotifyServer = prefs.getString(KEY_GOTIFY_SERVER, "") ?: "",
         gotifyToken = prefs.getString(KEY_GOTIFY_TOKEN, "") ?: "",
@@ -188,6 +190,11 @@ class SettingsStore(context: Context) {
         refresh()
     }
 
+    fun setAnimatedActiveIndicator(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_ANIMATED_ACTIVE, enabled).apply()
+        refresh()
+    }
+
     fun setGotifyEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_GOTIFY_ENABLED, enabled).apply()
         refresh()
@@ -264,6 +271,7 @@ class SettingsStore(context: Context) {
         private const val KEY_VOICE_SPEED = "voice_speed"
         private const val KEY_VOICE_BARGE_IN = "voice_barge_in"
         private const val KEY_VOICE_AUTO_LISTEN = "voice_auto_listen"
+        private const val KEY_ANIMATED_ACTIVE = "animated_active_indicator"
         private const val KEY_GOTIFY_ENABLED = "gotify_enabled"
         private const val KEY_GOTIFY_SERVER = "gotify_server"
         private const val KEY_GOTIFY_TOKEN = "gotify_token"

@@ -40,6 +40,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _activePcId = MutableStateFlow(pcProfiles.activeId())
     val activePcId: StateFlow<String> = _activePcId.asStateFlow()
 
+    private val _favoriteSessions = MutableStateFlow<Set<String>>(emptySet())
+    val favoriteSessions: StateFlow<Set<String>> = _favoriteSessions.asStateFlow()
+
     private val _pcStatus = MutableStateFlow<Map<String, String>>(emptyMap())
     val pcStatus: StateFlow<Map<String, String>> = _pcStatus.asStateFlow()
 
@@ -75,9 +78,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             _pcProfiles.value = listOf(profile)
             _activePcId.value = profile.id
         }
+        // Seed the active profile from the old global position, but only when
+        // the global address actually belongs to that PC.
+        seedActiveProfilePosition()
+        refreshFavorites()
         if (settings.baseUrl().isNotBlank() && settings.token() != null) {
             repository.connect()
         }
+        // Per-PC position: the repository persists every confirmed cwd/session
+        // to the profile that is active right now, never to another PC.
+        repository.onRememberLast = { cwd, session -> savePositionToActive(cwd, session) }
         // Live oppgaveovervåking (Etappe 3): koble ChatRepository-hendelser til TaskStore.
         repository.taskListener = { event ->
             val pcId = pcProfiles.activeId().ifBlank { "default" }
@@ -99,6 +109,41 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+    }
+
+    /** Copy the legacy global position into the active profile once. */
+    private fun seedActiveProfilePosition() {
+        val activeId = pcProfiles.activeId()
+        if (activeId.isBlank()) return
+        val list = pcProfiles.load()
+        val idx = list.indexOfFirst { it.id == activeId }
+        if (idx < 0) return
+        val profile = list[idx]
+        if (profile.lastCwd.isNotBlank() || profile.lastSession.isNotBlank()) return
+        val saved = settings.state.value
+        if (saved.lastCwd.isBlank() && saved.lastSession.isBlank()) return
+        val base = SettingsStore.normalizeBaseUrl(settings.baseUrl())
+        if (base.isBlank() || profile.candidateUrls().none { it == base }) return
+        list[idx] = profile.copy(lastCwd = saved.lastCwd, lastSession = saved.lastSession)
+        pcProfiles.save(list)
+        _pcProfiles.value = list
+    }
+
+    /** Persist the position to the profile that is active right now. */
+    private fun savePositionToActive(cwd: String, session: String) {
+        savePositionTo(pcProfiles.activeId(), cwd, session)
+    }
+
+    private fun savePositionTo(id: String, cwd: String, session: String) {
+        if (id.isBlank()) return
+        val list = pcProfiles.load()
+        val idx = list.indexOfFirst { it.id == id }
+        if (idx < 0) return
+        val profile = list[idx]
+        if (profile.lastCwd == cwd && profile.lastSession == session) return
+        list[idx] = profile.copy(lastCwd = cwd, lastSession = session)
+        pcProfiles.save(list)
+        _pcProfiles.value = list
     }
 
     // -----------------------------------------------------------------------
@@ -149,8 +194,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (settings.state.value.language == "en") en else nb
 
     fun disconnect() {
+        // Keep the position for this PC before the in-memory state is dropped.
+        savePositionTo(pcProfiles.activeId(), settings.state.value.lastCwd, settings.state.value.lastSession)
         repository.disconnect()
         settings.clearConnection()
+        settings.rememberLast("", "")
     }
 
     /** Activity ON_START: rebuild stream + resync state/messages. */
@@ -319,6 +367,31 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun activePc(): PcProfile? = _pcProfiles.value.firstOrNull { it.id == _activePcId.value }
 
+    fun isFavorite(sessionFile: String): Boolean = _favoriteSessions.value.contains(sessionFile)
+
+    fun toggleFavorite(sessionFile: String) {
+        if (sessionFile.isBlank()) return
+        val id = pcProfiles.activeId()
+        if (id.isBlank()) return
+        val next = if (_favoriteSessions.value.contains(sessionFile)) {
+            _favoriteSessions.value - sessionFile
+        } else {
+            _favoriteSessions.value + sessionFile
+        }
+        _favoriteSessions.value = next
+        val list = pcProfiles.load()
+        val idx = list.indexOfFirst { it.id == id }
+        if (idx >= 0) {
+            list[idx] = list[idx].copy(favoriteSessions = next.toList())
+            pcProfiles.save(list)
+            _pcProfiles.value = list
+        }
+    }
+
+    private fun refreshFavorites() {
+        _favoriteSessions.value = activePc()?.favoriteSessions?.toSet() ?: emptySet()
+    }
+
     /**
      * En alternativ adresse svarte. Gjør den til primær (raskere kall neste
      * gang) og behold de andre som reserveløsninger.
@@ -327,11 +400,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val normalized = com.omp.chat.data.SettingsStore.normalizeBaseUrl(url)
         if (normalized.isBlank()) return
         if (pcId.isBlank()) return
-        if (pcId == _activePcId.value) settings.updateBaseUrl(normalized)
         val list = pcProfiles.load()
         val idx = list.indexOfFirst { it.id == pcId }
         if (idx < 0) return
         val profile = list[idx]
+        // Only promote an address that belongs to this PC. A late callback from
+        // the previous PC must not rewrite the new PC's primary address.
+        if (profile.candidateUrls().none { it == normalized }) return
+        if (pcId == _activePcId.value) settings.updateBaseUrl(normalized)
         if (com.omp.chat.data.SettingsStore.normalizeBaseUrl(profile.baseUrl) == normalized) return
         val endpoints = (profile.endpoints + profile.baseUrl)
             .map { com.omp.chat.data.SettingsStore.normalizeBaseUrl(it) }
@@ -377,21 +453,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun disconnectPc(id: String = pcProfiles.activeId()) {
         if (id.isBlank()) return
-        // Lagre gjeldende sesjon/cwd til profilen før frakobling
-        val list = pcProfiles.load()
-        val idx = list.indexOfFirst { it.id == id }
-        if (idx >= 0) {
-            list[idx] = list[idx].copy(
-                lastCwd = settings.state.value.lastCwd,
-                lastSession = settings.state.value.lastSession
-            )
-            pcProfiles.save(list)
+        if (id == pcProfiles.activeId()) {
+            // Lagre gjeldende sesjon/cwd til den aktive profilen før frakobling.
+            savePositionTo(id, settings.state.value.lastCwd, settings.state.value.lastSession)
         }
         pcProfiles.setActiveId("")
         repository.disconnect()
         settings.clearConnection()
+        settings.rememberLast("", "")
         _activePcId.value = ""
         refreshPcProfiles()
+        _favoriteSessions.value = emptySet()
         _pcStatus.value = _pcStatus.value + (id to "offline")
     }
 
@@ -400,27 +472,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         // Lagre gjeldende sesjon/cwd til forrige profil.
         val currentId = pcProfiles.activeId()
         if (currentId.isNotBlank() && currentId != id) {
-            val prev = pcProfiles.load().firstOrNull { it.id == currentId }
-            if (prev != null) {
-                pcProfiles.save(
-                    pcProfiles.load().map {
-                        if (it.id == currentId) it.copy(
-                            lastCwd = settings.state.value.lastCwd,
-                            lastSession = settings.state.value.lastSession
-                        ) else it
-                    }
-                )
-            }
+            savePositionTo(currentId, settings.state.value.lastCwd, settings.state.value.lastSession)
         }
-        pcProfiles.setActiveId(id)
+        // Stop everything from the old PC *before* the active id changes, so
+        // no late response can be attributed to the new profile.
         repository.disconnect()
+        pcProfiles.setActiveId(id)
         settings.saveConnection(profile.baseUrl, profile.token)
         repository.fallbackModelKey = profile.fallbackModel
-        if (profile.lastCwd.isNotBlank() || profile.lastSession.isNotBlank()) {
-            settings.rememberLast(profile.lastCwd, profile.lastSession.ifBlank { null })
-        }
+        // Always replace the global position. A blank value is meaningful:
+        // the new PC must not resume the previous PC's conversation.
+        settings.rememberLast(profile.lastCwd, profile.lastSession)
         _activePcId.value = id
         refreshPcProfiles()
+        refreshFavorites()
         if (profile.autoConnect) repository.connect()
         // Gotify config is best-effort and pushed separately via Settings screen.
         // Do NOT call it here to avoid "Gotify-konfig feilet" toasts during pairing.

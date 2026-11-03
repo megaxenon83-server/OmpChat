@@ -226,6 +226,19 @@ object Parsers {
         archived = json.bool("archived")
     )
 
+    fun trashItem(json: JsonObject): TrashItem = TrashItem(
+        trashId = json.str("trashId"),
+        file = json.str("file"),
+        originalFile = json.str("originalFile"),
+        originalDir = json.str("originalDir"),
+        sessionId = json.str("sessionId"),
+        cwd = json.str("cwd"),
+        title = json.str("title").ifBlank { "Ny samtale" },
+        archived = json.bool("archived"),
+        deletedAt = json.long("deletedAt"),
+        messageCount = json.int("messageCount"),
+        size = json.long("size")
+    )
     fun model(json: JsonObject): ModelInfo {
         val input = json.arr("input").mapNotNull { element ->
             if (element.isJsonPrimitive) element.asString else null

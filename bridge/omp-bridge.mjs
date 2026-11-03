@@ -23,7 +23,7 @@ import crypto from "node:crypto";
 import { spawn, exec, execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const VERSION = "2.9.9";
+const VERSION = "2.9.12";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 // Resource monitoring state
@@ -137,6 +137,58 @@ const OMP_BIN = (() => {
 const HOME = os.homedir();
 const SESSIONS_ROOT = path.join(HOME, ".omp", "agent", "sessions");
 const TRASH_ROOT = path.join(SESSIONS_ROOT, "_ompchat-trash");
+
+// ---------------------------------------------------------------------------
+// Path helpers
+//
+// A stored path is only a working directory when it is absolute and exists.
+// "C:" is a drive-relative stub, not a folder, and must never be shown or used
+// as a project. Casing is preserved where OMP compares paths verbatim.
+// ---------------------------------------------------------------------------
+
+const IS_WINDOWS = process.platform === "win32";
+
+function isAbsoluteDirPath(value) {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  if (/^[A-Za-z]:$/.test(trimmed)) return false;
+  if (IS_WINDOWS) {
+    return /^[A-Za-z]:[\\/]/.test(trimmed) || /^\\\\[^\\]+\\/.test(trimmed);
+  }
+  return trimmed.startsWith("/");
+}
+
+/** The path exactly as given (casing preserved) when it is an existing folder. */
+function existingDir(value) {
+  if (!isAbsoluteDirPath(value)) return "";
+  const resolved = path.resolve(value.trim());
+  try {
+    if (!fs.statSync(resolved).isDirectory()) return "";
+  } catch {
+    return "";
+  }
+  return resolved;
+}
+
+/** Canonical spelling of an existing folder (real casing on Windows). */
+function canonicalDir(value) {
+  const dir = existingDir(value);
+  if (!dir) return "";
+  try {
+    return fs.realpathSync.native(dir);
+  } catch {
+    return dir;
+  }
+}
+
+/** Windows paths compare case-insensitively; other platforms stay exact. */
+function samePath(a, b) {
+  if (!a || !b) return false;
+  const left = path.resolve(String(a).trim());
+  const right = path.resolve(String(b).trim());
+  return IS_WINDOWS ? left.toLowerCase() === right.toLowerCase() : left === right;
+}
 
 // ---------------------------------------------------------------------------
 // Config
@@ -463,8 +515,6 @@ function describeSession(file, entries, stat) {
             toolCount += message.content.filter((block) => block && block.type === "toolCall").length;
           }
           if (message.model) model = `${message.provider ? message.provider + "/" : ""}${message.model}`;
-        } else if (message.role === "toolResult") {
-          messageCount++;
         }
         break;
       }
@@ -599,7 +649,7 @@ function listSessions({ cwd, includeArchived = false } = {}) {
     }
     if (!session) continue;
     if (!includeArchived && session.archived) continue;
-    if (cwd && path.resolve(session.cwd || "") !== path.resolve(cwd)) continue;
+    if (cwd && !samePath(session.cwd, cwd)) continue;
     sessions.push(session);
   }
   sessions.sort((a, b) => b.updatedAt - a.updatedAt);
@@ -1215,6 +1265,10 @@ function summariseMessage(message, messageId) {
 
 const runtimes = new Map();
 
+// Siste rapporterte aktive OMP-terminalsesjon (fra en valgfri extension).
+// Dette er IKKE Bridge-runtimen; det er brukerens faktiske TUI-valg.
+let ompActive = null;
+
 function runtimeKey(cwd) {
   return path.resolve(cwd);
 }
@@ -1491,29 +1545,27 @@ function lanAddresses() {
 }
 
 function projects() {
+  // Only folders that actually contain OMP sessions belong in the overview.
+  // Valid but empty folders are still selectable through /api/folders; they are
+  // not projects until a conversation exists in them.
   const seen = new Map();
   for (const session of listSessions({ includeArchived: true })) {
     if (!session.cwd) continue;
-    const key = path.resolve(session.cwd);
-    const entry = seen.get(key) || { path: key, name: path.basename(key), sessionCount: 0, lastActive: 0, exists: fs.existsSync(key) };
+    const canonical = canonicalDir(session.cwd);
+    const fallback = isAbsoluteDirPath(session.cwd) ? path.resolve(session.cwd) : "";
+    const display = canonical || fallback;
+    if (!display) continue;
+    const key = IS_WINDOWS ? display.toLowerCase() : display;
+    const entry = seen.get(key) || {
+      path: display,
+      name: path.basename(display) || display,
+      sessionCount: 0,
+      lastActive: 0,
+      exists: !!canonical,
+    };
     entry.sessionCount++;
     entry.lastActive = Math.max(entry.lastActive, session.updatedAt);
     seen.set(key, entry);
-  }
-  for (const root of CONFIG.projectRoots) {
-    let entries = [];
-    try {
-      entries = fs.readdirSync(root, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
-      const full = path.join(root, entry.name);
-      if (seen.has(full)) continue;
-      seen.set(full, { path: full, name: entry.name, sessionCount: 0, lastActive: 0, exists: true });
-    }
   }
   return [...seen.values()].sort((a, b) => b.lastActive - a.lastActive || a.name.localeCompare(b.name));
 }
@@ -2075,10 +2127,134 @@ async function handle(req, res) {
       case "GET /api/projects":
         return json(res, 200, { projects: projects() });
 
+      case "GET /api/folders/validate": {
+        const raw = url.searchParams.get("path") || "";
+        const dir = canonicalDir(raw);
+        return json(res, 200, {
+          valid: !!dir,
+          path: dir || raw,
+          name: dir ? (path.basename(dir) || dir) : "",
+        });
+      }
+
+      case "GET /api/folders": {
+        const raw = url.searchParams.get("path") || HOME;
+        const dir = canonicalDir(raw);
+        if (!dir) return json(res, 400, { error: "Mappen finnes ikke" });
+        let entries = [];
+        try {
+          entries = fs.readdirSync(dir, { withFileTypes: true });
+        } catch (error) {
+          return json(res, 400, { error: `Kunne ikke lese mappen: ${error.message}` });
+        }
+        const dirs = entries
+          .filter((entry) => entry.isDirectory() && !entry.name.startsWith(".") && !entry.name.startsWith("$"))
+          .map((entry) => ({ path: path.join(dir, entry.name), name: entry.name }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+        return json(res, 200, { path: dir, parent: path.dirname(dir), dirs });
+      }
+
+      case "POST /api/omp/active": {
+        const body = await readBody(req);
+        ompActive = {
+          instanceId: String(body.instanceId || ""),
+          sessionId: String(body.sessionId || ""),
+          sessionFile: body.sessionFile ? path.resolve(body.sessionFile) : "",
+          cwd: body.cwd ? path.resolve(body.cwd) : "",
+          reportedAt: Date.now(),
+        };
+        // Let Android discover the change without aggressive polling by also
+        // logging it; SSE broadcast is not available on this endpoint today.
+        log("info", `omp active reported: ${ompActive.sessionId} (${ompActive.instanceId || "unknown"})`);
+        return json(res, 200, { ok: true, ...ompActive });
+      }
+
+      case "GET /api/active": {
+        // En nylig rapportert OMP-terminalsesjon er mer autoritativ enn
+        // Bridge-runtimen. Rapporter eldre enn 2 minutter regnes som foreldet.
+        if (ompActive && Date.now() - ompActive.reportedAt < 120000 && ompActive.sessionFile) {
+          return json(res, 200, {
+            sessionFile: ompActive.sessionFile,
+            sessionId: ompActive.sessionId,
+            cwd: ompActive.cwd,
+            streaming: false,
+            lastUsed: ompActive.reportedAt,
+            source: "omp-tui",
+            instanceId: ompActive.instanceId,
+            reportedAt: ompActive.reportedAt,
+          });
+        }
+        const runtime = [...runtimes.values()]
+          .filter((entry) => entry.sessionFile)
+          .sort((a, b) => b.lastUsed - a.lastUsed)[0];
+        if (!runtime) return json(res, 404, { error: "Ingen aktiv Bridge-samtale" });
+        return json(res, 200, {
+          sessionFile: runtime.sessionFile,
+          sessionId: runtime.sessionId,
+          cwd: runtime.cwd,
+          streaming: !!runtime.state?.isStreaming,
+          lastUsed: runtime.lastUsed,
+          source: "bridge-runtime",
+          instanceId: "",
+          reportedAt: runtime.lastUsed,
+        });
+      }
+
       case "GET /api/sessions": {
         const cwd = url.searchParams.get("cwd");
         const includeArchived = url.searchParams.get("archived") === "1";
-        return json(res, 200, { sessions: listSessions({ cwd: cwd || undefined, includeArchived }) });
+        const q = (url.searchParams.get("q") || "").trim();
+        const limitRaw = url.searchParams.get("limit");
+        const offset = Math.max(0, Number(url.searchParams.get("offset") || 0));
+        const content = url.searchParams.get("content") === "1";
+        const limit = limitRaw ? Math.max(1, Math.min(200, Number(limitRaw))) : null;
+        let sessions = listSessions({ cwd: cwd || undefined, includeArchived });
+        if (q) {
+          const low = q.toLowerCase();
+          const matched = [];
+          const matchedFiles = new Set();
+          // 1) Billig metadata-søk (tittel, mappe).
+          for (const session of sessions) {
+            const haystack = `${session.title || ""} ${session.cwd || ""}`.toLowerCase();
+            if (haystack.includes(low)) {
+              matched.push(session);
+              matchedFiles.add(session.file);
+            }
+          }
+          // 2) Valgfritt innholdssøk, kun hvis vi trenger flere resultater og
+          //    brukeren eksplisitt ber om det.
+          if (content && matched.length < (offset + (limit || sessions.length))) {
+            for (const session of sessions) {
+              if (matchedFiles.has(session.file)) continue;
+              let hit = false;
+              let snippet = "";
+              try {
+                for (const entry of entriesFor(session.file)) {
+                  if (entry.type !== "message" || !entry.message) continue;
+                  const text = textOfContent(entry.message.content);
+                  if (text && text.toLowerCase().includes(low)) {
+                    hit = true;
+                    snippet = text.replace(/\s+/g, " ").trim().slice(0, 140);
+                    break;
+                  }
+                }
+              } catch {}
+              if (hit) {
+                session.snippet = snippet;
+                matched.push(session);
+                matchedFiles.add(session.file);
+              }
+              if (matched.length >= offset + (limit || sessions.length) + 20) break;
+            }
+          }
+          sessions = matched;
+        }
+        sessions.sort((a, b) => b.updatedAt - a.updatedAt);
+        const total = sessions.length;
+        const sliced = limit == null
+          ? sessions.slice(offset)
+          : sessions.slice(offset, offset + limit);
+        return json(res, 200, { sessions: sliced, total });
       }
 
       case "GET /api/session/messages": {
@@ -2097,31 +2273,78 @@ async function handle(req, res) {
         const file = path.resolve(body.file);
         const session = loadSession(file);
         if (!session) return json(res, 404, { error: "Fant ikke samtalen" });
-        const cwd = session.cwd || body.cwd;
-        if (!cwd) return json(res, 400, { error: "Samtalen mangler prosjektmappe" });
-        const runtime = await getRuntime(cwd);
-        const result = await runtime.rpc("switch_session", { sessionPath: file }, 60000);
-        runtime.sessionFile = result?.sessionFile || file;
-        runtime.sessionId = result?.sessionId || session.id;
-        const state = await runtime.refreshState();
-        const entries = entriesFor(runtime.sessionFile);
-        return json(res, 200, {
-          session: loadSession(runtime.sessionFile) || session,
-          state: publicState(state),
-          messages: toAppMessages(entries),
-        });
+        const messages = toAppMessages(entriesFor(file));
+        // An explicit cwd from the app is only used when the stored one is
+        // unusable. The agent never runs in a folder that is missing, and a
+        // different folder is never guessed: history stays readable instead.
+        const recordedDir = existingDir(session.cwd);
+        const requestedDir = existingDir(body.cwd);
+        const cwd = recordedDir || requestedDir;
+        if (!cwd) {
+          return json(res, 200, {
+            session,
+            messages,
+            readOnly: true,
+            reason: session.cwd
+              ? `Arbeidsmappen finnes ikke: ${session.cwd}`
+              : "Samtalen mangler arbeidsmappe",
+            cwd: "",
+            state: null,
+          });
+        }
+        try {
+          const runtime = await getRuntime(cwd);
+          const result = await runtime.rpc("switch_session", { sessionPath: file }, 60000);
+          if (result?.cancelled) {
+            // OMP refused because the session is bound to a working folder the
+            // runtime does not match. Do not pretend the switch succeeded.
+            return json(res, 200, {
+              session,
+              messages,
+              readOnly: true,
+              reason: "OMP avviste samtalen fordi den er knyttet til en annen arbeidsmappe.",
+              cwd: "",
+              state: null,
+            });
+          }
+          runtime.sessionFile = result?.sessionFile || file;
+          runtime.sessionId = result?.sessionId || session.id;
+          const state = await runtime.refreshState();
+          const entries = entriesFor(runtime.sessionFile);
+          return json(res, 200, {
+            session: loadSession(runtime.sessionFile) || session,
+            state: publicState(state),
+            messages: toAppMessages(entries),
+            cwd: runtime.cwd,
+            readOnly: false,
+          });
+        } catch (error) {
+          log("warn", `open ${file} failed: ${error?.message || error}`);
+          return json(res, 200, {
+            session,
+            messages,
+            readOnly: true,
+            reason: String(error?.message || error),
+            cwd: "",
+            state: null,
+          });
+        }
       }
 
       case "POST /api/sessions/new": {
         const body = await readBody(req);
-        const cwd = body.cwd ? path.resolve(body.cwd) : "";
-        if (!cwd) return json(res, 400, { error: "Mangler cwd" });
+        const cwd = existingDir(body.cwd);
+        if (!cwd) {
+          return json(res, 400, {
+            error: "Prosjektmappen finnes ikke eller er ikke en mappe. Velg en gyldig mappe.",
+          });
+        }
         const runtime = await getRuntime(cwd);
         await runtime.rpc("new_session", body.parentSession ? { parentSession: body.parentSession } : {}, 60000);
         const state = await runtime.refreshState();
         const file = runtime.sessionFile;
         const session = file ? loadSession(file) : null;
-        return json(res, 200, { session, state: publicState(state), messages: [] });
+        return json(res, 200, { session, state: publicState(state), messages: [], cwd: runtime.cwd });
       }
 
       case "POST /api/sessions/name": {
@@ -2156,6 +2379,12 @@ async function handle(req, res) {
         const body = await readBody(req);
         if (!body.file) return json(res, 400, { error: "Mangler file" });
         const file = path.resolve(body.file);
+        const runtimeActive = [...runtimes.values()].some((r) => path.resolve(r.sessionFile || "") === file);
+        const tuiActive = !!ompActive && (Date.now() - ompActive.reportedAt < 120000) &&
+          path.resolve(ompActive.sessionFile || "") === file;
+        if (runtimeActive || tuiActive) {
+          return json(res, 409, { error: "Samtalen er aktiv og kan ikke arkiveres." });
+        }
         metaFor(file).archived = body.archived !== false;
         saveMeta();
         sessionCache.delete(file);
@@ -2166,27 +2395,121 @@ async function handle(req, res) {
         const file = url.searchParams.get("file");
         if (!file) return json(res, 400, { error: "Mangler file" });
         const resolved = path.resolve(file);
-        if (!resolved.startsWith(SESSIONS_ROOT) && !fs.existsSync(path.join(path.dirname(resolved), path.basename(resolved)))) {
+        if (!resolved.startsWith(SESSIONS_ROOT)) {
           return json(res, 400, { error: "Samtalen ligger utenfor OMPs samtalemappe" });
         }
         if (!fs.existsSync(resolved)) return json(res, 404, { error: "Fant ikke samtalen" });
+        // Beskytt aktiv samtale (Bridge-runtime og nylig rapportert OMP-TUI).
+        const runtimeActive = [...runtimes.values()].some((r) => path.resolve(r.sessionFile || "") === resolved);
+        const tuiActive = !!ompActive && (Date.now() - ompActive.reportedAt < 120000) &&
+          path.resolve(ompActive.sessionFile || "") === resolved;
+        if (runtimeActive || tuiActive) {
+          return json(res, 409, { error: "Samtalen er aktiv og kan ikke flyttes til papirkurven." });
+        }
         const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-        const target = path.join(TRASH_ROOT, `${stamp}-${path.basename(path.dirname(resolved))}`);
+        const id = `${stamp}-${path.basename(path.dirname(resolved))}`;
+        const target = path.join(TRASH_ROOT, id);
         await fsp.mkdir(target, { recursive: true });
         await fsp.rename(resolved, path.join(target, path.basename(resolved)));
         const dossier = resolved.replace(/\.jsonl$/, "");
         if (fs.existsSync(dossier) && fs.statSync(dossier).isDirectory()) {
           await fsp.rename(dossier, path.join(target, path.basename(dossier)));
         }
+        // Bevar metadata for gjenoppretting.
+        const session = loadSession(path.join(target, path.basename(resolved)));
+        const metaObj = {
+          originalFile: resolved,
+          originalDir: path.dirname(resolved),
+          sessionId: session?.id || "",
+          cwd: session?.cwd || "",
+          title: session?.title || "",
+          archived: !!metaFor(resolved).archived,
+          deletedAt: Date.now(),
+        };
+        await fsp.writeFile(path.join(target, "meta.json"), JSON.stringify(metaObj, null, 2));
         delete meta.sessions[resolved];
         saveMeta();
         sessionCache.delete(resolved);
-        return json(res, 200, { ok: true, movedTo: target });
+        return json(res, 200, { ok: true, movedTo: target, trashId: id });
       }
 
+      case "GET /api/trash": {
+        const items = [];
+        if (fs.existsSync(TRASH_ROOT)) {
+          for (const entry of fs.readdirSync(TRASH_ROOT, { withFileTypes: true })) {
+            if (!entry.isDirectory()) continue;
+            const dir = path.join(TRASH_ROOT, entry.name);
+            let metaObj = null;
+            try { metaObj = JSON.parse(fs.readFileSync(path.join(dir, "meta.json"), "utf8")); } catch {}
+            const jsonl = fs.readdirSync(dir).find((name) => name.endsWith(".jsonl"));
+            if (!jsonl) continue;
+            const file = path.join(dir, jsonl);
+            const session = loadSession(file);
+            const stat = fs.statSync(file);
+            items.push({
+              trashId: entry.name,
+              file,
+              originalFile: metaObj?.originalFile || "",
+              originalDir: metaObj?.originalDir || "",
+              sessionId: metaObj?.sessionId || session?.id || "",
+              cwd: metaObj?.cwd || session?.cwd || "",
+              title: metaObj?.title || session?.title || path.basename(file, ".jsonl"),
+              archived: !!metaObj?.archived,
+              deletedAt: metaObj?.deletedAt || stat.mtimeMs,
+              messageCount: session?.messageCount || 0,
+              size: stat.size,
+            });
+          }
+        }
+        items.sort((a, b) => b.deletedAt - a.deletedAt);
+        return json(res, 200, { items });
+      }
+
+      case "POST /api/trash/restore": {
+        const body = await readBody(req);
+        const file = body.file ? path.resolve(body.file) : "";
+        if (!file || !fs.existsSync(file)) return json(res, 404, { error: "Fant ikke samtalen i papirkurven" });
+        const dir = path.dirname(file);
+        let metaObj = null;
+        try { metaObj = JSON.parse(fs.readFileSync(path.join(dir, "meta.json"), "utf8")); } catch {}
+        const originalDir = metaObj?.originalDir || path.dirname(metaObj?.originalFile || "");
+        const targetDir = originalDir && fs.existsSync(originalDir) ? originalDir : SESSIONS_ROOT;
+        await fsp.mkdir(targetDir, { recursive: true });
+        const base = path.basename(file);
+        let target = path.join(targetDir, base);
+        if (fs.existsSync(target)) {
+          const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+          target = path.join(targetDir, `${path.basename(base, ".jsonl")}-${stamp}.jsonl`);
+        }
+        await fsp.rename(file, target);
+        const dossier = file.replace(/\.jsonl$/, "");
+        if (fs.existsSync(dossier) && fs.statSync(dossier).isDirectory()) {
+          const targetDossier = target.replace(/\.jsonl$/, "");
+          if (!fs.existsSync(targetDossier)) await fsp.rename(dossier, targetDossier);
+        }
+        // Rydd opp meta/trash-mappe hvis tom.
+        try {
+          const remaining = fs.readdirSync(dir);
+          if (remaining.length === 0) await fsp.rmdir(dir);
+          else {
+            // fjern meta.json hvis den finnes
+            const metaPath = path.join(dir, "meta.json");
+            if (fs.existsSync(metaPath)) await fsp.unlink(metaPath);
+          }
+        } catch {}
+        if (metaObj?.originalFile) {
+          // behold meta for gjenopprettet fil hvis ønskelig (ikke nødvendig)
+        }
+        sessionCache.delete(file);
+        return json(res, 200, { ok: true, file: target });
+      }
       case "GET /api/state": {
-        const cwd = url.searchParams.get("cwd");
-        if (!cwd) return json(res, 400, { error: "Mangler cwd" });
+        const cwd = existingDir(url.searchParams.get("cwd") || "");
+        if (!cwd) {
+          // A missing folder is not an error the app should crash on; it must
+          // keep the last valid folder and show no invented project.
+          return json(res, 200, { state: null, sessionFile: "", cwdMissing: true });
+        }
         const runtime = await getRuntime(cwd);
         const pending = runtime.pendingUi.values().next();
         // While OMP waits for an approval/question the RPC loop is blocked, so
@@ -2227,11 +2550,29 @@ async function handle(req, res) {
 
       case "POST /api/prompt": {
         const body = await readBody(req);
-        if (!body.cwd) return json(res, 400, { error: "Mangler cwd" });
+        const cwd = existingDir(body.cwd);
+        if (!cwd) return json(res, 400, { error: "Arbeidsmappen finnes ikke. Velg en gyldig mappe." });
         if (typeof body.text !== "string" || !body.text.trim()) return json(res, 400, { error: "Tom melding" });
-        const runtime = await getRuntime(body.cwd);
-        if (body.file && path.resolve(body.file) !== path.resolve(runtime.sessionFile || "")) {
-          await runtime.rpc("switch_session", { sessionPath: path.resolve(body.file) }, 60000);
+        // Never run a prompt in a folder the selected conversation does not
+        // belong to. A mismatched cwd is a client bug, not a silent fallback.
+        let target = null;
+        if (body.file) {
+          target = loadSession(path.resolve(body.file));
+          if (!target) return json(res, 404, { error: "Fant ikke samtalen" });
+          if (target.cwd && !samePath(target.cwd, cwd)) {
+            return json(res, 409, {
+              error: "Samtalen tilhører en annen arbeidsmappe. Åpne den på nytt fra listen.",
+            });
+          }
+        }
+        const runtime = await getRuntime(cwd);
+        if (target && path.resolve(body.file) !== path.resolve(runtime.sessionFile || "")) {
+          const switched = await runtime.rpc("switch_session", { sessionPath: path.resolve(body.file) }, 60000);
+          if (switched?.cancelled) {
+            return json(res, 409, {
+              error: "OMP avviste samtalen fordi arbeidsmappen er forskjellig.",
+            });
+          }
           await runtime.refreshState();
         }
         if (Array.isArray(body.attachments) && body.attachments.length) {
@@ -3478,6 +3819,18 @@ server.listen(CONFIG.port, CONFIG.host, () => {
   // (paths may be short 8.3 forms, which makes command-line matching unreliable).
   try {
     fs.writeFileSync(path.join(HERE, "bridge.pid"), String(process.pid));
+  } catch {}
+  // Discovery file for the optional OMP extension that reports the active TUI
+  // session. Contains no secrets beyond the local pairing token.
+  try {
+    const dir = path.join(os.homedir(), ".ompchat");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "bridge.json"), JSON.stringify({
+      url: `http://127.0.0.1:${CONFIG.port}`,
+      token: CONFIG.token,
+      port: CONFIG.port,
+      updatedAt: Date.now(),
+    }));
   } catch {}
   // Kill the resident voice worker when the bridge is shut down.
   for (const signal of ["SIGINT", "SIGTERM", "exit"]) {

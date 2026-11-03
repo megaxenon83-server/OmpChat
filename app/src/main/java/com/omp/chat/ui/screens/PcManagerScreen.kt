@@ -406,10 +406,15 @@ private fun PcEditDialog(
                         wolPort = wolPort.toIntOrNull() ?: 9,
                         lastCwd = profile?.lastCwd ?: "",
                         lastSession = profile?.lastSession ?: "",
+                        favoriteSessions = profile?.favoriteSessions ?: emptyList(),
                         autoConnect = autoConnect,
+                        favoriteModels = profile?.favoriteModels ?: emptyList(),
+                        fallbackModel = profile?.fallbackModel ?: "",
                         useDockerWol = useDocker,
                         dockerWolUrl = dockerUrl.trim(),
                         dockerWolToken = dockerToken.trim(),
+                        lanUrl = profile?.lanUrl ?: "",
+                        tailscaleUrl = profile?.tailscaleUrl ?: "",
                         endpoints = extraEndpoints.lines()
                             .map { it.trim() }
                             .filter { it.isNotBlank() }

@@ -21,6 +21,7 @@ data class PcProfile(
     val wolPort: Int = 9,
     val lastCwd: String = "",
     val lastSession: String = "",
+    val favoriteSessions: List<String> = emptyList(),
     val autoConnect: Boolean = true,
     val favoriteModels: List<String> = emptyList(),
     val fallbackModel: String = "",
@@ -87,6 +88,7 @@ class PcProfileStore(context: Context) {
                         wolPort = o.optInt("wolPort", 9),
                         lastCwd = o.optString("lastCwd"),
                         lastSession = o.optString("lastSession"),
+                        favoriteSessions = (0 until o.optJSONArray("favoriteSessions").let { it?.length() ?: 0 }).map { o.optJSONArray("favoriteSessions").optString(it) }.filter { it.isNotBlank() },
                         autoConnect = o.optBoolean("autoConnect", true),
                         favoriteModels = (0 until o.optJSONArray("favoriteModels").let { it?.length() ?: 0 }).map { o.optJSONArray("favoriteModels").optString(it) },
                         fallbackModel = o.optString("fallbackModel"),
@@ -127,6 +129,9 @@ class PcProfileStore(context: Context) {
                 put("wolPort", p.wolPort)
                 put("lastCwd", p.lastCwd)
                 put("lastSession", p.lastSession)
+                val favSessionsArr = org.json.JSONArray()
+                p.favoriteSessions.forEach { favSessionsArr.put(it) }
+                put("favoriteSessions", favSessionsArr)
                 put("autoConnect", p.autoConnect)
                 val favArr = org.json.JSONArray()
                 p.favoriteModels.forEach { favArr.put(it) }

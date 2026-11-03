@@ -61,6 +61,8 @@ class Strings(val lang: String) {
     val transfersRunning get() = s("overføringer", "transfers")
     val phoneIntro get() = s("Legg til tilgang til en mappe (f.eks. Downloads) for å lese og skrive filer raskt, uten systemfilvelger hver gang.", "Grant access to a folder (e.g. Downloads) to browse without opening the system picker every time.")
     val pickPcFolder get() = s("Velg mappe på PC-en", "Pick PC folder")
+    val browseFolders get() = s("Bla gjennom mapper på PC-en", "Browse PC folders")
+    val parentFolder get() = s("Opp ett nivå", "Up one level")
     val pickThis get() = s("Bruk denne mappen", "Use this folder")
     val unreadableImage get() = s("Klarte ikke vise bildet", "Could not show the image")
     val tapImageHint get() = s("Trykk for å se bildet", "Tap to view the image")

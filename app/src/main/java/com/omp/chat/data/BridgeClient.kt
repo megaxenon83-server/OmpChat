@@ -71,6 +71,17 @@ class BridgeClient(
     }
 
     fun health(): JsonObject = call("GET", "/api/health")
+
+    /** Health against an explicit candidate address, before it is promoted. */
+    fun health(baseUrl: String): JsonObject {
+        val request = Request.Builder()
+            .url(join(baseUrl, "/api/health"))
+            .apply { tokenProvider()?.let { header("Authorization", "Bearer $it") } }
+            .get()
+            .build()
+        return execute(request)
+    }
+
     fun resources(): JsonObject = call("GET", "/api/resources")
 
     // -----------------------------------------------------------------------
@@ -80,15 +91,23 @@ class BridgeClient(
     fun projects(): List<Project> =
         call("GET", "/api/projects").arr("projects").mapNotNull { it.asObjectOrNull()?.let(Parsers::project) }
 
-    fun sessions(cwd: String? = null, archived: Boolean = false): List<SessionSummary> {
-        val query = buildString {
-            append("/api/sessions")
-            val params = mutableListOf<String>()
-            if (!cwd.isNullOrBlank()) params += "cwd=${encode(cwd)}"
-            if (archived) params += "archived=1"
-            if (params.isNotEmpty()) append("?").append(params.joinToString("&"))
-        }
-        return call("GET", query).arr("sessions").mapNotNull { it.asObjectOrNull()?.let(Parsers::session) }
+    fun sessions(
+        cwd: String? = null,
+        archived: Boolean = false,
+        query: String? = null,
+        limit: Int? = null,
+        offset: Int = 0,
+        content: Boolean = false
+    ): List<SessionSummary> {
+        val params = mutableListOf<String>()
+        if (!cwd.isNullOrBlank()) params += "cwd=${encode(cwd)}"
+        if (archived) params += "archived=1"
+        if (!query.isNullOrBlank()) params += "q=${encode(query)}"
+        if (limit != null) params += "limit=$limit"
+        if (offset > 0) params += "offset=$offset"
+        if (content) params += "content=1"
+        val path = "/api/sessions" + if (params.isEmpty()) "" else "?" + params.joinToString("&")
+        return call("GET", path).arr("sessions").mapNotNull { it.asObjectOrNull()?.let(Parsers::session) }
     }
 
     fun transcript(file: String): Pair<SessionSummary?, List<ChatMessage>> {
@@ -100,17 +119,80 @@ class BridgeClient(
         return session to messages
     }
 
-    fun openSession(file: String): Pair<ChatState, List<ChatMessage>> {
-        val json = call("POST", "/api/sessions/open", JsonObject().apply { addProperty("file", file) }, 90)
-        val state = Parsers.state(json.obj("state"))
-        val messages = json.arr("messages").mapNotNull { it.asObjectOrNull()?.let(Parsers::message) }
-        return state to messages
+    /**
+     * Open a stored conversation.
+     *
+     * The bridge decides whether it can actually resume it in an OMP runtime.
+     * When the original working folder is gone (or OMP refuses the switch) it
+     * answers with [OpenSessionResult.readOnly] and the stored transcript, so
+     * history stays readable without running the agent in a guessed folder.
+     */
+    fun openSession(file: String, cwd: String? = null): OpenSessionResult {
+        val body = JsonObject().apply {
+            addProperty("file", file)
+            if (!cwd.isNullOrBlank()) addProperty("cwd", cwd)
+        }
+        val json = call("POST", "/api/sessions/open", body, 90)
+        return OpenSessionResult(
+            state = json.obj("state")?.let(Parsers::state),
+            messages = json.arr("messages").mapNotNull { it.asObjectOrNull()?.let(Parsers::message) },
+            session = json.obj("session")?.let(Parsers::session),
+            cwd = json.str("cwd"),
+            readOnly = json.bool("readOnly"),
+            reason = json.str("reason")
+        )
     }
 
-    fun newSession(cwd: String): Pair<SessionSummary?, ChatState> {
+    fun newSession(cwd: String): NewSessionResult {
         val json = call("POST", "/api/sessions/new", JsonObject().apply { addProperty("cwd", cwd) }, 90)
-        return json.obj("session")?.let(Parsers::session) to Parsers.state(json.obj("state"))
+        return NewSessionResult(
+            session = json.obj("session")?.let(Parsers::session),
+            state = Parsers.state(json.obj("state")),
+            cwd = json.str("cwd")
+        )
     }
+
+    /** The session the bridge runtime has loaded most recently, if any. */
+    fun activeSession(): ActiveBridgeSession? {
+        val json = try {
+            call("GET", "/api/active")
+        } catch (error: BridgeException) {
+            if (error.status == 404) return null
+            throw error
+        }
+        val file = json.str("sessionFile")
+        if (file.isBlank()) return null
+        return ActiveBridgeSession(
+            sessionFile = file,
+            sessionId = json.str("sessionId"),
+            cwd = json.str("cwd"),
+            streaming = json.bool("streaming"),
+            lastUsed = json.long("lastUsed"),
+            source = json.str("source").ifBlank { "bridge-runtime" },
+            instanceId = json.str("instanceId"),
+            reportedAt = json.long("reportedAt")
+        )
+    }
+
+    /** Validate a folder before it becomes the working folder. */
+    fun validateFolder(path: String): FolderInfo? {
+        val json = call("GET", "/api/folders/validate?path=${encode(path)}")
+        if (!json.bool("valid")) return null
+        return FolderInfo(path = json.str("path"), name = json.str("name"))
+    }
+
+    fun folders(path: String): FolderListing =
+        call("GET", "/api/folders?path=${encode(path)}").let { json ->
+            FolderListing(
+                path = json.str("path"),
+                parent = json.str("parent"),
+                dirs = json.arr("dirs").mapNotNull { element ->
+                    element.asObjectOrNull()?.let {
+                        FolderInfo(path = it.str("path"), name = it.str("name"))
+                    }
+                }
+            )
+        }
 
     fun renameSession(file: String, name: String) {
         call(
@@ -131,6 +213,12 @@ class BridgeClient(
             }
         )
     }
+
+    fun trash(): List<TrashItem> =
+        call("GET", "/api/trash").arr("items").mapNotNull { it.asObjectOrNull()?.let(Parsers::trashItem) }
+
+    fun restoreTrash(file: String): String =
+        call("POST", "/api/trash/restore", JsonObject().apply { addProperty("file", file) }).str("file")
 
     fun deleteSession(file: String) {
         call("DELETE", "/api/session?file=${encode(file)}")
@@ -616,4 +704,56 @@ data class VoiceClip(
     val audioUrl: String,
     val duration: Double,
     val engine: String
+)
+
+/** Result of `POST /api/sessions/open`. */
+data class OpenSessionResult(
+    val state: ChatState?,
+    val messages: List<ChatMessage>,
+    val session: SessionSummary?,
+    /** Working folder OMP actually uses; blank when the session is read-only. */
+    val cwd: String,
+    /** True when the transcript is readable but the agent cannot resume there. */
+    val readOnly: Boolean,
+    val reason: String
+)
+
+/** Result of `POST /api/sessions/new`; [cwd] is the canonical folder OMP uses. */
+data class NewSessionResult(
+    val session: SessionSummary?,
+    val state: ChatState,
+    val cwd: String
+)
+
+/** A bridge runtime's most recently used conversation. */
+data class ActiveBridgeSession(
+    val sessionFile: String,
+    val sessionId: String,
+    val cwd: String,
+    val streaming: Boolean,
+    val lastUsed: Long,
+    val source: String = "bridge-runtime",
+    val instanceId: String = "",
+    val reportedAt: Long = 0
+)
+
+data class FolderInfo(val path: String, val name: String)
+
+data class TrashItem(
+    val trashId: String,
+    val file: String,
+    val originalFile: String,
+    val originalDir: String,
+    val sessionId: String,
+    val cwd: String,
+    val title: String,
+    val archived: Boolean,
+    val deletedAt: Long,
+    val messageCount: Int,
+    val size: Long
+)
+data class FolderListing(
+    val path: String,
+    val parent: String,
+    val dirs: List<FolderInfo>
 )

@@ -1060,3 +1060,68 @@ Debug-APK signeres med Androids standard debug-n�kkel, release-APK med ompchat
 - Fixed ChatGptDrawer: closes drawer after onOpenActiveChat and onSelectProject
 - Fixed currentProjectName: shows full path instead of 'C:' for Windows drive letters
 - Build verified: assembleRelease SUCCESS
+
+## FASE 1 – 2026-11-03 (versionCode 83, 2.9.58, bridge 2.9.10)
+
+**Implementert (ikke publisert):**
+
+- `bridge/omp-bridge.mjs`: path-helpers (`isAbsoluteDirPath`, `existingDir`, `canonicalDir`, `samePath`), `projects()` viser kun mapper med sesjoner (ingen tomme `projectRoots`), `listSessions()` filter case-insensitivt på Windows, `POST /api/sessions/open` returnerer `readOnly` + transcript ved manglende/forsvunnet mappe eller avvist `switch_session`, `POST /api/sessions/new` validerer mappe og returnerer kanonisk `cwd`, `POST /api/prompt` avviser mismatched cwd (409), `GET /api/state` returnerer 200 `{state:null, cwdMissing:true}`, nye `GET /api/folders/validate`, `GET /api/folders`, `GET /api/active`.
+- Android `ChatRepository`: epoch/generasjonstoken for PC-isolasjon, `bumpEpoch`/`isCurrent`, `connect()` med token-guards, `disconnect()` bump + kansellering, `openSession()` read-only vs gjenopptak, `openSessionByFile()` uten cwd-gjetting, `openNewChat()` kanonisk cwd, `switchFolder()`, `openActiveBridgeSession()`, `send()` read-only-guard og token-guards, `applyState`/`sameProject` via `CwdPath`, `validateRememberedFolder()`, `resolvedCwd()` uten bare `C:`.
+- Android `PathUtil.kt`: `CwdPath` (isUsable, key, same, displayName, projectLabel). `C:` og relative stier avvises.
+- Android `BridgeClient`: `health(baseUrl)`, `openSession(file, cwd?)` → `OpenSessionResult`, `newSession` → `NewSessionResult`, `activeSession()`, `validateFolder()`, `folders()` og resultatklasser.
+- `AppViewModel`: per-PC position (`onRememberLast`), migrering av global position kun når adresse tilhører profilen, `switchPc`/`disconnectPc` lagrer før bytte, `promoteEndpoint` guarder mot fremmed PC.
+- UI: `ChatGptDrawer` bruker `CwdPath` (ingen false `C:`), `ChatScreen` read-only-banner, `AppRoot.onOpenActiveChat` bruker bridge `active`, `ChatsScreen` mappeleser (tomme mapper kan velges for ny chat).
+
+**Verifisert:**
+
+- `gradlew :app:compileDebugKotlin` – BUILD SUCCESSFUL.
+- `gradlew :app:assembleDebug` – BUILD SUCCESSFUL (`OmpChat-2.9.58` debug APK, versionCode 83).
+- Bridge v2.9.10 testet på port 7791:
+  - `/api/projects` returnerer 12 prosjekt-mapper, ingen med `sessionCount=0`.
+  - `/api/folders/validate`: `C:` → invalid, manglende mappe → invalid, gyldig mappe → valid + kanonisk sti.
+  - `/api/folders`: kanonisk sti og barn returneres.
+  - `/api/state?cwd=C:` → 200 `{state:null, cwdMissing:true}`.
+  - `/api/sessions/open` normal lowercase-cwd-sesjon → `readOnly=false`, `cwd` kanonisk, 10 meldinger.
+  - `/api/sessions/open` sesjon med forsvunnet mappe → `readOnly=true`, `state=null`, transcript returnert, begrunnelse.
+  - `/api/sessions/new` med `C:` → 400; gyldig tom mappe → 200 + kanonisk `cwd` + ny sesjon.
+  - `/api/sessions?cwd=` med ulik casing → samme 20 sesjoner (case-insensitivt på Windows).
+  - `/api/prompt` med mismatched cwd → 409.
+  - `/api/active` → sessionFile/sessionId/cwd/source `bridge-runtime`.
+- Fake read-only sesjonsfil og test-tommappe ryddet opp etter test.
+
+**Ikke publisert / ikke testet:**
+
+- Ingen release-APK, installer eller opplasting til chat.nimay.net er bygget (krever egen godkjenning).
+- Emulator/UI-flyter (rask PC-bytte, manglende mappe, casing, aktiv chat) er ikke kjørt manuelt i denne runden; kun kompilering og bridge-endepunkter er verifisert.
+- Fysisk telefon (Motorola moto g86 power 5G) gjenstår.
+- Bridge v2.9.10 er ikke deployert til installert `C:\Program Files\Nimay OMP\bridge` (kjørende bro er fortsatt 2.9.9); kildekode er oppdatert.
+
+**Neste steg:**
+
+- Kjør emulator-test av PC-bytte/mangler/casing/aktiv chat med debug-APK mot en ny bro (7777 byttet til kilde).
+- Evt. bygg release-APK/installer etter godkjenning og publiser per FEST REGEL.
+- Oppdater `PcEditDialog` fullstendig med `lanUrl`/`tailscaleUrl`/favoritter/fallback (delvis berørt av per-PC-arbeid).
+
+## FASE 2 – 2026-11-03 (debug, 2.9.58)
+- Ny sidemeny: PC-velger, aktiv Bridge-samtale, søk, nylige, prosjekter, favoritter.
+- Backend paginering/søk i /api/sessions (limit/offset/q/content).
+- Prosjekthistorikk-skjerm med Last flere.
+- Per-PC favoritter i PcProfile.
+- Debug-APK bygget: app/build/outputs/apk/debug/app-debug.apk
+
+## FASE 3 – 2026-11-03 (debug, 2.9.59)
+- Bridge: POST /api/omp/active, GET /api/active source omp-tui/bridge-runtime, discovery file ~/.ompchat/bridge.json.
+- Extension: omp-extensions/ompchat-active-session.ts (valgfri, manuell installasjon).
+- Android: activeBridgeSession i RepoState, polling, LIVE-indikator med animasjon (innstilling animatedActiveIndicator).
+- Debug-APK: app/build/outputs/apk/debug/app-debug.apk
+
+## FASE 4 – 2026-11-03 (debug, 2.9.60)
+- CleanupScreen, ArchivedScreen, TrashScreen.
+- Bridge: trash metadata, restore, active protection, message count excludes toolResult.
+- Debug-APK: app/build/outputs/apk/debug/app-debug.apk
+
+## FASE 5 – 2026-11-03 (release candidate, 2.9.60)
+- Unit tests: BUILD SUCCESSFUL.
+- Release APK bygget: app/build/outputs/apk/release/app-release.apk (SHA256 F651F9D199ABA342E2781A14962A5B6086FBECAD025D853BC242E988B05C6812).
+- Bridge trash/restore verifisert.
+- Installer/Task Scheduler: 'Nimay OMP Bridge' peker til %LOCALAPPDATA%\\Nimay\\OMPBridge (bridge 2.9.9). Ingen endring gjort.

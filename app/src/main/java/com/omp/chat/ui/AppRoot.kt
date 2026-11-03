@@ -13,6 +13,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -20,6 +21,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
+import com.omp.chat.data.RepoState
 import com.omp.chat.data.SessionSummary
 import com.omp.chat.ui.components.DeleteDialog
 import com.omp.chat.ui.components.RenameDialog
@@ -31,7 +34,7 @@ import com.omp.chat.ui.screens.VoiceCallScreen
 import com.omp.chat.ui.theme.OmpTheme
 import com.omp.chat.util.Notifier
 
-enum class Screen { Chats, Chat, Settings, Voice, Files, Pcs, Tasks, Terminal, Git, Gotify }
+enum class Screen { Chats, Chat, Settings, Voice, Files, Pcs, Tasks, Terminal, Git, Gotify, ProjectHistory, Cleanup, Archived, Trash }
 
 @Composable
 fun AppRoot(
@@ -59,6 +62,9 @@ fun AppRoot(
     var skipPairing by rememberSaveable { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<SessionSummary?>(null) }
     var deleteTarget by remember { mutableStateOf<SessionSummary?>(null) }
+    var projectHistoryPath by remember { mutableStateOf("") }
+    var trashItems by remember { mutableStateOf(emptyList<com.omp.chat.data.TrashItem>()) }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(settings.paired) {
         if (settings.paired) skipPairing = false
@@ -120,6 +126,9 @@ fun AppRoot(
                                     viewModel.repository.loadSessions()
                                     viewModel.repository.loadProjects()
                                     viewModel.repository.connect()
+                                },
+                                onListFolders = { path ->
+                                    runCatching { viewModel.repository.bridge.folders(path) }.getOrNull()
                                 }
                             )
 
@@ -219,12 +228,17 @@ fun AppRoot(
                                 },
                                 onOpenActiveChat = {
                                     screen = Screen.Chat
-                                     val activeSession = state.sessions.firstOrNull { it.file == state.sessionFile }
-                                    if (activeSession != null) {
-                                        viewModel.repository.openSession(activeSession)
-                                    } else if (state.sessionFile.isNotBlank()) {
-                                        viewModel.repository.openSessionByFile(state.sessionFile)
-                                    }
+                                    // The bridge is the only source that can prove
+                                    // which session its runtime currently has open.
+                                    viewModel.repository.openActiveBridgeSession()
+                                },
+                                onOpenCleanup = { screen = Screen.Cleanup },
+                                pcName = viewModel.activePc()?.name ?: "PC",
+                                loadActiveBridge = { runCatching { viewModel.repository.bridge.activeSession() }.getOrNull() },
+                                animatedActive = settings.animatedActiveIndicator,
+                                onOpenProjectHistory = { path ->
+                                    projectHistoryPath = path
+                                    screen = Screen.ProjectHistory
                                 },
                                 onReconnect = { viewModel.repository.connect() },
                                 onReloadModels = { viewModel.reloadModels() },
@@ -249,8 +263,8 @@ fun AppRoot(
                                     viewModel.repository.newChat(cwd)
                                      screen = Screen.Chat
                                 },
-                                onToggleFavorite = { viewModel.repository.toggleFavorite(it) },
-                                isFavorite = { viewModel.repository.isFavorite(it) }
+                                onToggleFavorite = { viewModel.toggleFavorite(it) },
+                                isFavorite = { viewModel.isFavorite(it) }
                             )
 
                             Screen.Settings -> SettingsScreen(
@@ -288,6 +302,77 @@ fun AppRoot(
                                 onOpenGotify = { screen = Screen.Gotify },
                                 onResourceMonitorEnabled = { viewModel.settings.setResourceMonitorEnabled(it) },
                                 onPinMessagesEnabled = { viewModel.settings.setPinMessagesEnabled(it) }
+                            )
+
+                            Screen.ProjectHistory -> com.omp.chat.ui.screens.ProjectHistoryScreen(
+                                projectPath = projectHistoryPath,
+                                state = state,
+                                onBack = { screen = Screen.Chat },
+                                onOpenSession = { session ->
+                                    viewModel.repository.openSession(session)
+                                    screen = Screen.Chat
+                                },
+                                onLoadPage = { offset ->
+                                    runCatching {
+                                        viewModel.repository.bridge.sessions(cwd = projectHistoryPath, limit = 20, offset = offset)
+                                    }.getOrNull() ?: emptyList()
+                                }
+                            )
+
+                            Screen.Cleanup -> com.omp.chat.ui.screens.CleanupScreen(
+                                state = state,
+                                onBack = { screen = Screen.Chat },
+                                onOpenSession = { session ->
+                                    viewModel.repository.openSession(session)
+                                    screen = Screen.Chat
+                                },
+                                onArchiveSelected = { files ->
+                                    files.forEach { viewModel.repository.archive(it, true) }
+                                    viewModel.repository.loadSessions()
+                                    viewModel.repository.loadProjects()
+                                },
+                                onTrashSelected = { files ->
+                                    files.forEach { viewModel.repository.delete(it) }
+                                    viewModel.repository.loadSessions()
+                                    viewModel.repository.loadProjects()
+                                },
+                                onOpenArchived = { screen = Screen.Archived },
+                                onOpenTrash = {
+                                    scope.launch {
+                                        trashItems = runCatching { viewModel.repository.bridge.trash() }.getOrNull() ?: emptyList()
+                                    }
+                                    screen = Screen.Trash
+                                }
+                            )
+
+                            Screen.Archived -> com.omp.chat.ui.screens.ArchivedScreen(
+                                state = state,
+                                onBack = { screen = Screen.Chat },
+                                onOpenSession = { session ->
+                                    viewModel.repository.openSession(session)
+                                    screen = Screen.Chat
+                                },
+                                onRestore = { file ->
+                                    viewModel.repository.archive(file, false)
+                                    viewModel.repository.loadSessions()
+                                    viewModel.repository.loadProjects()
+                                }
+                            )
+
+                            Screen.Trash -> com.omp.chat.ui.screens.TrashScreen(
+                                items = trashItems,
+                                onBack = { screen = Screen.Chat },
+                                onRestore = { file ->
+                                    scope.launch {
+                                        runCatching { viewModel.repository.bridge.restoreTrash(file) }
+                                        viewModel.repository.loadSessions()
+                                        viewModel.repository.loadProjects()
+                                        trashItems = runCatching { viewModel.repository.bridge.trash() }.getOrNull() ?: emptyList()
+                                    }
+                                },
+                                onOpen = { item ->
+                                    // read-only view by file if still restorable? Just attempt open
+                                }
                             )
 
                             Screen.Voice -> VoiceCallScreen(

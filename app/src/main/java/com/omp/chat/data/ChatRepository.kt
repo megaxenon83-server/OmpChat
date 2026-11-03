@@ -32,6 +32,10 @@ data class RepoState(
     val streaming: Boolean = false,
     val cwd: String = "",
     val sessionFile: String = "",
+    val activeBridgeSession: com.omp.chat.data.ActiveBridgeSession? = null,
+    val readOnly: Boolean = false,
+    val readOnlyFile: String = "",
+    val readOnlyReason: String = "",
     val title: String = "",
     val todos: List<TodoPhase> = emptyList(),
     val request: UiRequest? = null,
@@ -89,10 +93,51 @@ class ChatRepository(private val settings: SettingsStore) {
     private var dirty = false
     private var activeId = ""
     private var eventJob: Job? = null
+    private var connectJob: Job? = null
+    private var activeBridgeJob: Job? = null
     private var noticeSeq = 0L
     private var terminalSeq = 0L
     private var autoTitleSession = false
     private var firstUserMessage = ""
+
+    /**
+     * Generation token for the currently connected PC. Every asynchronous
+     * request captures the token it started under and refuses to write state
+     * once the PC has been switched or disconnected. This is what keeps an
+     * in-flight answer from PC A out of PC B's session list.
+     */
+    @Volatile
+    private var epoch = 0
+
+    /** Persists cwd/session to the active PC profile (set by AppViewModel). */
+    var onRememberLast: (cwd: String, sessionFile: String) -> Unit = { _, _ -> }
+
+    /**
+     * Starts a new generation. Everything that was started under an older
+     * token (connect probes, SSE events, resource polling, open/new chat) is
+     * stale after this call and must not write state any more.
+     */
+    private fun bumpEpoch(): Int = synchronized(this) { ++epoch }
+
+    /** True while [token] is still the generation of the connected PC. */
+    private fun isCurrent(token: Int): Boolean = token == epoch
+
+    /**
+     * Serial number for "open/new conversation". Two taps on different rows
+     * must not let the slower answer overwrite the newer one.
+     */
+    private var sessionOp = 0
+
+    private fun beginSessionOp(): Int = synchronized(this) { ++sessionOp }
+
+    private fun isSessionOpCurrent(op: Int, token: Int): Boolean =
+        op == sessionOp && isCurrent(token)
+
+    /** Persist the position for the active PC only (never for another PC). */
+    private fun rememberLast(cwd: String, sessionFile: String) {
+        settings.rememberLast(cwd, sessionFile)
+        onRememberLast(cwd, sessionFile)
+    }
 
     /** Favorittmarkerte sesjons-ID-er, lagret lokalt og overlever app-restart. */
     private val favoriteSessionIds = mutableSetOf<String>()
@@ -122,7 +167,10 @@ class ChatRepository(private val settings: SettingsStore) {
             _state.update { it.copy(connected = false, connecting = false) }
             return
         }
-        scope.launch {
+        val token = bumpEpoch()
+        connectJob?.cancel()
+        connectJob = scope.launch {
+            if (!isCurrent(token)) return@launch
             _state.update { it.copy(connecting = true, error = "") }
             val candidates = (listOf(settings.baseUrl()) + candidatesProvider())
                 .map { it.trimEnd('/') }
@@ -145,18 +193,17 @@ class ChatRepository(private val settings: SettingsStore) {
             // Prøv hver kandidat i rekkefølge, verifiser både ping OG health.
             // Ikke promoter en adresse til primær før både ping og health er bestått.
             for (probe in probes) {
+                if (!isCurrent(token)) return@launch
                 if (!probe.ok) continue
                 try {
-                    // Midlertidig sett denne adressen som primær for health-sjekk
-                    settings.updateBaseUrl(probe.url)
                     pingResult = client.ping(probe.url)
-                    healthResult = client.health()
+                    // Health is checked against the candidate explicitly; the
+                    // shared baseUrl is only promoted after it has answered.
+                    healthResult = client.health(probe.url)
                     connectedUrl = probe.url
                     android.util.Log.d("OmpChat", "connect: ping+health OK på ${probe.url}, versjon ${pingResult?.str("version")}")
                     break // Suksess, stopp å prøve
                 } catch (error: Exception) {
-                    // Reverter baseUrl til original
-                    settings.updateBaseUrl(originalBaseUrl)
                     if (error is BridgeException && error.status in listOf(401, 403)) {
                         tokenRejected = true
                     }
@@ -166,19 +213,27 @@ class ChatRepository(private val settings: SettingsStore) {
                 }
             }
 
+            // A switch/disconnect may have happened while probing.
+            if (!isCurrent(token)) return@launch
+
             if (connectedUrl == null) {
                 // Alle kandidater feilet
                 val reachable = probes.any { it.ok }
-                val detail = probes.joinToString(" �� ") { probe ->
+                val detail = probes.joinToString(" · ") { probe ->
                     "${EndpointResolver.hostLabel(probe.url)}: ${if (probe.ok) "OK" else probe.reason}"
                 }
                 if (tokenRejected) {
-                    settings.clearConnection()
+                    synchronized(this@ChatRepository) {
+                        if (isCurrent(token)) settings.clearConnection()
+                    }
                     android.util.Log.d("OmpChat", "connect: token avvist - tømmer tilkobling")
                 } else {
                     // Reverter til original baseUrl
-                    settings.updateBaseUrl(originalBaseUrl)
+                    synchronized(this@ChatRepository) {
+                        if (isCurrent(token)) settings.updateBaseUrl(originalBaseUrl)
+                    }
                 }
+                if (!isCurrent(token)) return@launch
                 val message = if (tokenRejected) {
                     "Tokenet ble avvist av bridgen. Skann QR-koden på nytt for å få et nytt token."
                 } else if (reachable) {
@@ -198,7 +253,13 @@ class ChatRepository(private val settings: SettingsStore) {
             }
 
             // Suksess - oppdater state
-            settings.updateBaseUrl(connectedUrl!!)
+            val promoted = synchronized(this@ChatRepository) {
+                if (!isCurrent(token)) false else {
+                    settings.updateBaseUrl(connectedUrl)
+                    true
+                }
+            }
+            if (!promoted) return@launch
             val ping = pingResult!!
             val health = healthResult!!
             val hosts = ping.get("hosts")
@@ -207,6 +268,7 @@ class ChatRepository(private val settings: SettingsStore) {
                 ?.mapNotNull { runCatching { it.asString }.getOrNull() }
                 .orEmpty()
             if (hosts.isNotEmpty()) onHostsDiscovered(hosts)
+            if (!isCurrent(token)) return@launch
             _state.update {
                 it.copy(
                     connected = true,
@@ -218,21 +280,25 @@ class ChatRepository(private val settings: SettingsStore) {
                     terminalEnabled = health.get("allowBash")?.asBoolean == true
                 )
             }
-            startEvents()
-            refreshAll()
-            resumeLast()
-            startResourcesPolling()
+            startEvents(token)
+            refreshAll(token)
+            scope.launch { validateRememberedFolder(token) }
+            resumeLast(token)
+            startResourcesPolling(token)
+            startActiveBridgePolling(token)
+        }
     }
-}
 
     private var resourcesPollingJob: Job? = null
 
     /** Hent PC-ressurser (CPU, RAM, GPU) fra Bridge. */
     fun loadResources() {
         if (!state.value.connected) return
+        val token = epoch
         scope.launch(Dispatchers.IO) {
             try {
                 val json = client.resources()
+                if (!isCurrent(token)) return@launch
                 val resources = PcResources(
                     cpuPercent = json.get("cpu")?.asJsonObject?.get("percent")?.asInt ?: 0,
                     cpuCores = json.get("cpu")?.asJsonObject?.get("cores")?.asInt ?: 0,
@@ -282,10 +348,10 @@ class ChatRepository(private val settings: SettingsStore) {
     }
 
     /** Start periodisk polling av PC-ressurser (hvert 5. sekund). */
-    fun startResourcesPolling() {
+    fun startResourcesPolling(token: Int = epoch) {
         resourcesPollingJob?.cancel()
         resourcesPollingJob = scope.launch {
-            while (isActive) {
+            while (isActive && isCurrent(token)) {
                 loadResources()
                 delay(30000)
             }
@@ -297,15 +363,58 @@ class ChatRepository(private val settings: SettingsStore) {
         resourcesPollingJob?.cancel()
         resourcesPollingJob = null
     }
+
+    /** Start polling the bridge's active session (OMP TUI or Bridge runtime). */
+    fun startActiveBridgePolling(token: Int = epoch) {
+        activeBridgeJob?.cancel()
+        activeBridgeJob = scope.launch {
+            while (isActive && isCurrent(token)) {
+                fetchActiveBridge(token)
+                delay(10000)
+            }
+        }
+    }
+
+    private suspend fun fetchActiveBridge(token: Int) {
+        if (!isCurrent(token)) return
+        val active = try {
+            client.activeSession()
+        } catch (_: Exception) {
+            null
+        }
+        if (!isCurrent(token)) return
+        _state.update { it.copy(activeBridgeSession = active) }
+    }
+
+    /** Stopp polling av aktiv Bridge-samtale. */
+    fun stopActiveBridgePolling() {
+        activeBridgeJob?.cancel()
+        activeBridgeJob = null
+    }
     /** Adressen som skal brukes: vinneren fra probe, ellers primæradressen. */
     private fun winningUrl(probes: List<EndpointProbe>): String =
         probes.firstOrNull { it.ok }?.url ?: settings.baseUrl()
 
     fun disconnect() {
+        bumpEpoch()
+        connectJob?.cancel()
+        connectJob = null
+        backgroundMonitor?.cancel()
+        backgroundMonitor = null
         stopResourcesPolling()
         eventJob?.cancel()
         eventJob = null
-        _state.update { RepoState() }
+        activeBridgeJob?.cancel()
+        activeBridgeJob = null
+        synchronized(lock) {
+            messages.clear()
+            streamText.clear()
+            streamThinking.clear()
+            localUsers.clear()
+            dirty = false
+        }
+        activeId = ""
+        _state.value = RepoState()
     }
 
     // -----------------------------------------------------------------------
@@ -322,17 +431,18 @@ class ChatRepository(private val settings: SettingsStore) {
     fun onAppForeground() {
         val configured = settings.baseUrl().isNotBlank() && settings.token() != null
         if (!configured) return
+        val token = epoch
         android.util.Log.d("OmpChat", "onAppForeground: alive=${eventJob?.isActive == true && _state.value.connected}")
         val alive = eventJob?.isActive == true && _state.value.connected
         backgroundMonitor?.cancel()
         backgroundMonitor = null
         if (alive) {
-            resyncAfterReconnect("foreground")
+            resyncAfterReconnect("foreground", token)
         } else {
             // Half-open sockets cannot be kept: cancel and rebuild the SSE
             // loop, then resync. No session is reopened or restarted.
-            startEvents()
-            resyncAfterReconnect("foreground-reconnect")
+            startEvents(token)
+            resyncAfterReconnect("foreground-reconnect", token)
         }
     }
 
@@ -343,6 +453,7 @@ class ChatRepository(private val settings: SettingsStore) {
      * battery and avoid dead-socket states.
      */
     fun onAppBackground() {
+        val token = epoch
         backgroundMonitor?.cancel()
         backgroundMonitor = scope.launch {
             // While an OMP task is streaming we keep the live stream warm; the
@@ -352,6 +463,7 @@ class ChatRepository(private val settings: SettingsStore) {
             if (_state.value.streaming) {
                 _state.first { !it.streaming && it.loadedOnce }
             }
+            if (!isCurrent(token)) return@launch
             eventJob?.cancel()
             eventJob = null
         }
@@ -372,39 +484,47 @@ class ChatRepository(private val settings: SettingsStore) {
         null
     }
 
-    private fun startEvents() {
+    private fun startEvents(token: Int = epoch) {
         eventJob?.cancel()
         eventJob = scope.launch {
-            client.events(null).collect { event -> handle(event) }
+            client.events(null).collect { event ->
+                // A late event from the previous PC must never reach the new
+                // PC's state, even if the stream was still draining.
+                if (isCurrent(token)) handle(event, token)
+            }
         }
     }
 
     /** Minimum gap between two automatic resyncs, so reconnect storms stay calm. */
     private var lastResync = 0L
 
-    private fun resyncAfterReconnect(reason: String) {
+    private fun resyncAfterReconnect(reason: String, token: Int = epoch) {
         val now = System.currentTimeMillis()
         if (now - lastResync < 2500) return
         lastResync = now
         scope.launch {
+            if (!isCurrent(token)) return@launch
             // 1) Authoritative transcript of the open session fills everything
             //    missed while the stream was down. Never touch the session
             //    itself: a running OMP task must not be restarted or replaced.
             val streaming = _state.value.streaming
-            if (_state.value.sessionFile.isNotBlank() && !streaming) {
+            if (!_state.value.readOnly && _state.value.sessionFile.isNotBlank() && !streaming) {
                 runCatching { reloadTranscript() }
             }
+            if (!isCurrent(token)) return@launch
             // 2) Fresh runtime state (model, streaming flag, todos, pending UI
             //    request) via the normal GET /api/state endpoint.
             val cwd = resolvedCwd()
-            if (cwd.isNotBlank()) {
+            if (cwd.isNotBlank() && !_state.value.readOnly) {
                 try {
-                    client.stateRaw(cwd)?.let { applyState(it) }
+                    client.stateRaw(cwd)?.let { if (isCurrent(token)) applyState(it) }
                 } catch (_: Exception) {
                 }
-                runCatching { loadModels(cwd) }
+                if (!isCurrent(token)) return@launch
+                runCatching { loadModels(cwd, token) }
             }
-            runCatching { loadSessions() }
+            runCatching { loadSessions(token) }
+            if (!isCurrent(token)) return@launch
             // 3) A finished turn while offline means the empty tail bubble must
             //    go; a still-running turn keeps its live buffers.
             if (!_state.value.streaming) {
@@ -416,14 +536,15 @@ class ChatRepository(private val settings: SettingsStore) {
         }
     }
 
-    private fun refreshAll() {
-        scope.launch { runCatching { loadProjects() } }
-        scope.launch { runCatching { loadSessions() } }
+    private fun refreshAll(token: Int = epoch) {
+        scope.launch { if (isCurrent(token)) runCatching { loadProjects(token) } }
+        scope.launch { if (isCurrent(token)) runCatching { loadSessions(token) } }
         scope.launch {
+            if (!isCurrent(token)) return@launch
             val cwd = resolvedCwd()
             if (cwd.isNotBlank()) {
                 _state.update { it.copy(cwd = it.cwd.ifBlank { cwd }) }
-                runCatching { loadModels(cwd) }
+                runCatching { loadModels(cwd, token) }
             }
         }
     }
@@ -433,24 +554,55 @@ class ChatRepository(private val settings: SettingsStore) {
      * last used folder and finally to the most recently active project, so the
      * app can start a conversation even on a fresh install.
      */
-    private fun resolvedCwd(): String =
-        _state.value.cwd
-            .ifBlank { settings.state.value.lastCwd }
-            .ifBlank { _state.value.projects.firstOrNull()?.path ?: "" }
+    private fun resolvedCwd(): String {
+        val current = _state.value.cwd.trim()
+        if (CwdPath.isUsable(current)) return current
+        val last = settings.state.value.lastCwd.trim()
+        if (CwdPath.isUsable(last)) return last
+        return _state.value.projects.firstOrNull { it.exists && CwdPath.isUsable(it.path) }?.path
+            ?: _state.value.projects.firstOrNull { CwdPath.isUsable(it.path) }?.path
+            ?: ""
+    }
+
+    /** Validate a remembered folder against the bridge before using it. */
+    private suspend fun validateRememberedFolder(token: Int) {
+        if (!isCurrent(token)) return
+        val remembered = settings.state.value.lastCwd
+        if (!CwdPath.isUsable(remembered)) return
+        val valid = try {
+            client.validateFolder(remembered) != null
+        } catch (_: Exception) {
+            false
+        }
+        if (!isCurrent(token)) return
+        if (!valid) {
+            rememberLast("", settings.state.value.lastSession)
+            _state.update { it.copy(cwd = "") }
+        }
+    }
 
     /** Reopen the conversation the user was in when the app last closed. */
-    private fun resumeLast() {
+    private fun resumeLast(token: Int = epoch) {
         val last = settings.state.value
         android.util.Log.d("OmpChat", "resumeLast: lastSession='${last.lastSession}'")
         if (last.lastSession.isBlank()) return
         scope.launch {
+            if (!isCurrent(token)) return@launch
             try {
                 val sessions = client.sessions()
+                if (!isCurrent(token)) return@launch
                 android.util.Log.d("OmpChat", "resumeLast: fetched ${sessions.size} sessions")
                 val match = sessions.firstOrNull { it.file == last.lastSession }
                 android.util.Log.d("OmpChat", "resumeLast: match=$match")
-                if (match != null) openSession(match, silent = true)
-                else android.util.Log.d("OmpChat", "resumeLast: ingen match for '${last.lastSession}'")
+                if (match != null) {
+                    openSession(match, silent = true)
+                } else {
+                    // The session may not be listed (archived, moved, or its
+                    // working folder is gone). Open it by file so the stored
+                    // transcript stays readable; the bridge decides whether it
+                    // can resume.
+                    openSessionByFile(last.lastSession, silent = true)
+                }
             } catch (error: Exception) {
                 android.util.Log.d("OmpChat", "resumeLast feil: ${error.message}")
             }
@@ -461,38 +613,51 @@ class ChatRepository(private val settings: SettingsStore) {
     // Catalogs
     // -----------------------------------------------------------------------
 
-    fun loadProjects() {
+    fun loadProjects(token: Int = epoch) {
         scope.launch {
+            if (!isCurrent(token)) return@launch
             runCatching {
                 val projects = client.projects()
+                if (!isCurrent(token)) return@launch
                 _state.update { st ->
-                    val cwd = st.cwd
-                        .ifBlank { settings.state.value.lastCwd }
-                        .ifBlank { projects.firstOrNull()?.path ?: "" }
-                    st.copy(projects = projects, cwd = cwd)
+                    val current = st.cwd.takeIf { CwdPath.isUsable(it) }
+                        ?: settings.state.value.lastCwd.takeIf { CwdPath.isUsable(it) }
+                        ?: projects.firstOrNull { it.exists && CwdPath.isUsable(it.path) }?.path
+                        ?: projects.firstOrNull { CwdPath.isUsable(it.path) }?.path
+                        ?: ""
+                    st.copy(projects = projects, cwd = current)
                 }
                 if (_state.value.cwd.isNotBlank() && _state.value.models.isEmpty()) {
-                    loadModels(_state.value.cwd)
+                    loadModels(_state.value.cwd, token)
                 }
-            }.onFailure { pushNotice(it.message ?: "Kunne ikke hente prosjekter", "error") }
+            }.onFailure {
+                if (isCurrent(token)) pushNotice(it.message ?: "Kunne ikke hente prosjekter", "error")
+            }
         }
     }
 
-    fun loadSessions() {
+    fun loadSessions(token: Int = epoch) {
         scope.launch {
+            if (!isCurrent(token)) return@launch
             runCatching {
                 val active = client.sessions()
+                if (!isCurrent(token)) return@launch
                 val archived = client.sessions(archived = true).filter { it.archived }
+                if (!isCurrent(token)) return@launch
                 _state.update { it.copy(sessions = active, archivedSessions = archived) }
-            }.onFailure { pushNotice(it.message ?: "Kunne ikke hente samtaler", "error") }
+            }.onFailure {
+                if (isCurrent(token)) pushNotice(it.message ?: "Kunne ikke hente samtaler", "error")
+            }
         }
     }
 
-    fun loadModels(cwd: String = resolvedCwd()) {
-        if (cwd.isBlank()) return
+    fun loadModels(cwd: String = resolvedCwd(), token: Int = epoch) {
+        if (!CwdPath.isUsable(cwd)) return
         scope.launch {
+            if (!isCurrent(token)) return@launch
             runCatching {
                 val models = client.models(cwd)
+                if (!isCurrent(token)) return@launch
                 _state.update { it.copy(models = models) }
             }
         }
@@ -503,56 +668,136 @@ class ChatRepository(private val settings: SettingsStore) {
     // -----------------------------------------------------------------------
 
     /** Open a session by its file path (used by the Tasks screen). */
-    fun openSessionByFile(file: String) {
+    fun openSessionByFile(file: String, silent: Boolean = false) {
         if (file.isBlank()) return
         val existing = _state.value.sessions.firstOrNull { it.file == file }
             ?: _state.value.archivedSessions.firstOrNull { it.file == file }
+        // The working folder is never guessed from the current chat: the
+        // bridge uses the folder recorded inside the session file.
         val summary = existing ?: SessionSummary(
-            id = file, file = file, cwd = _state.value.cwd,
+            id = file, file = file, cwd = "",
             title = file.substringAfterLast('/').substringAfterLast('\\'),
             model = "", messageCount = 0, toolCount = 0, updatedAt = 0, archived = false
         )
-        openSession(summary)
+        openSession(summary, silent)
     }
 
+    /**
+     * Open a stored conversation.
+     *
+     * When the bridge can resume it, the working folder and runtime come from
+     * the bridge (the only proof of where OMP actually runs). When it cannot
+     * (folder deleted/moved, OMP refused the switch) the transcript is shown
+     * read-only, the previous valid working folder is kept, and nothing is
+     * persisted for this PC.
+     */
     fun openSession(session: SessionSummary, silent: Boolean = false) {
+        val token = epoch
+        val op = beginSessionOp()
         scope.launch {
             android.util.Log.d("OmpChat", "openSession: ${session.file} silent=$silent")
             _state.update { it.copy(busy = !silent, error = "") }
             try {
-                val (chat, transcript) = client.openSession(session.file)
-                android.util.Log.d("OmpChat", "openSession OK: ${transcript.size} meldinger")
+                val result = client.openSession(session.file)
+                if (!isSessionOpCurrent(op, token)) return@launch
                 synchronized(lock) {
                     messages.clear()
-                    messages.addAll(transcript)
+                    messages.addAll(result.messages)
                     streamText.clear()
                     streamThinking.clear()
+                    dirty = true
                 }
+                if (result.readOnly) {
+                    android.util.Log.d("OmpChat", "openSession read-only: ${result.reason}")
+                    _state.update {
+                        it.copy(
+                            busy = false,
+                            readOnly = true,
+                            readOnlyFile = session.file,
+                            readOnlyReason = result.reason.ifBlank {
+                                "Samtalen kan vises, men ikke gjenopptas i denne arbeidsmappen."
+                            },
+                            sessionFile = "",
+                            title = session.title.ifBlank { it.title },
+                            messages = result.messages,
+                            streaming = false,
+                            todos = emptyList(),
+                            request = null,
+                            chat = it.chat.copy(
+                                sessionFile = "",
+                                isStreaming = false,
+                                todoPhases = emptyList()
+                            )
+                        )
+                    }
+                    return@launch
+                }
+                val effectiveCwd = result.cwd.takeIf { CwdPath.isUsable(it) }
+                if (effectiveCwd == null) {
+                    // No proof of a working folder -> never persist a guess.
+                    _state.update {
+                        it.copy(
+                            busy = false,
+                            readOnly = true,
+                            readOnlyFile = session.file,
+                            readOnlyReason = "Bridgen oppgav ingen gyldig arbeidsmappe for samtalen.",
+                            sessionFile = "",
+                            title = session.title.ifBlank { it.title },
+                            messages = result.messages,
+                            streaming = false
+                        )
+                    }
+                    return@launch
+                }
+                val chat = result.state ?: ChatState(sessionFile = result.session?.file ?: session.file)
+                val file = chat.sessionFile.ifBlank { result.session?.file ?: session.file }
+                android.util.Log.d("OmpChat", "openSession OK: ${result.messages.size} meldinger i $effectiveCwd")
                 _state.update {
                     it.copy(
                         busy = false,
+                        readOnly = false,
+                        readOnlyFile = "",
+                        readOnlyReason = "",
                         chat = chat,
-                        cwd = session.cwd.ifBlank { chat.sessionFile.substringBeforeLast('\\') },
-                        sessionFile = chat.sessionFile.ifBlank { session.file },
-                        title = session.title,
-                        messages = transcript,
+                        cwd = effectiveCwd,
+                        sessionFile = file,
+                        title = session.title.ifBlank { it.title },
+                        messages = result.messages,
                         streaming = chat.isStreaming,
                         todos = chat.todoPhases,
+                        request = null,
                         models = it.models
                     )
                 }
-                settings.rememberLast(session.cwd, session.file)
-                loadModels(session.cwd.ifBlank { _state.value.cwd })
-                loadSessions()
+                rememberLast(effectiveCwd, file)
+                loadModels(effectiveCwd, token)
+                loadSessions(token)
             } catch (error: Exception) {
+                if (!isSessionOpCurrent(op, token)) return@launch
                 android.util.Log.d("OmpChat", "openSession FEIL: ${error.message}")
-                _state.update { it.copy(busy = false, error = error.message ?: "Kunne ikke åpne samtalen") }
+                if (silent) {
+                    // A resume that cannot be completed must stay quiet; the
+                    // user did not ask for this chat in this session.
+                    _state.update { it.copy(busy = false) }
+                } else {
+                    _state.update {
+                        it.copy(busy = false, error = error.message ?: "Kunne ikke åpne samtalen")
+                    }
+                }
             }
         }
     }
 
+    /**
+     * Start a new conversation in [cwd]. The bridge validates the folder and
+     * returns the canonical spelling it actually runs in; only that value is
+     * persisted. On failure nothing changes, so the previous working folder
+     * stays selected.
+     */
     fun newChat(cwd: String, title: String = "") {
-        scope.launch { openNewChat(cwd.ifBlank { resolvedCwd() }, title) }
+        val token = epoch
+        val op = beginSessionOp()
+        scope.launch { openNewChat(cwd.ifBlank { resolvedCwd() }, title, token, op) }
     }
 
     /**
@@ -561,30 +806,47 @@ class ChatRepository(private val settings: SettingsStore) {
      */
     suspend fun ensureSession(): Boolean {
         val current = _state.value
-        if (current.sessionFile.isNotBlank() && current.cwd.isNotBlank()) return true
+        if (current.readOnly) {
+            pushNotice("Denne samtalen er skrivebeskyttet. Start en ny samtale i en gyldig mappe.", "warning")
+            return false
+        }
+        if (current.sessionFile.isNotBlank() && CwdPath.isUsable(current.cwd)) return true
         return openNewChat(current.cwd.ifBlank { resolvedCwd() })
     }
 
-    private suspend fun openNewChat(cwd: String, title: String = ""): Boolean {
-        if (cwd.isBlank()) {
+    private suspend fun openNewChat(
+        cwd: String,
+        title: String = "",
+        token: Int = epoch,
+        op: Int = beginSessionOp()
+    ): Boolean {
+        if (!CwdPath.isUsable(cwd)) {
             pushNotice("Velg en prosjektmappe først", "warning")
             return false
         }
+        if (!isSessionOpCurrent(op, token)) return false
         autoTitleSession = title.isBlank()
         firstUserMessage = ""
         _state.update { it.copy(busy = true, error = "") }
         return try {
-            val (session, chat) = client.newSession(cwd)
-            val file = session?.file ?: chat.sessionFile
+            val result = client.newSession(cwd)
+            if (!isSessionOpCurrent(op, token)) return false
+            val canonical = result.cwd.takeIf { CwdPath.isUsable(it) } ?: cwd
+            val chat = result.state
+            val file = result.session?.file ?: chat.sessionFile
             synchronized(lock) {
                 messages.clear()
                 streamText.clear()
                 streamThinking.clear()
+                dirty = true
             }
             _state.update {
                 it.copy(
                     busy = false,
-                    cwd = cwd,
+                    readOnly = false,
+                    readOnlyFile = "",
+                    readOnlyReason = "",
+                    cwd = canonical,
                     sessionFile = file,
                     title = title,
                     chat = chat,
@@ -594,18 +856,83 @@ class ChatRepository(private val settings: SettingsStore) {
                     request = null
                 )
             }
-            settings.rememberLast(cwd, file)
+            rememberLast(canonical, file)
             val fallbackName = if (settings.state.value.language == "en") "New chat" else "Ny samtale"
             if (file.isNotBlank()) client.renameSession(file, title.ifBlank { fallbackName })
-            applyRememberedModel(cwd)
-            loadModels(cwd)
-            loadSessions()
+            if (!isSessionOpCurrent(op, token)) return false
+            applyRememberedModel(canonical, token)
+            loadModels(canonical, token)
+            loadSessions(token)
             true
         } catch (error: Exception) {
+            if (!isSessionOpCurrent(op, token)) return false
             val message = error.message ?: "Kunne ikke starte en ny samtale"
+            // Keep the previous valid working folder; only report the failure.
             _state.update { it.copy(busy = false, error = message) }
             pushNotice(message, "error")
             false
+        }
+    }
+
+    /**
+     * Ask the bridge to validate a folder and then start a new chat there.
+     * Used by the folder picker so an empty (but valid) folder is allowed,
+     * while a deleted/invalid folder is rejected before anything persists.
+     */
+    fun switchFolder(cwd: String) {
+        val token = epoch
+        val op = beginSessionOp()
+        scope.launch {
+            val folder = try {
+                client.validateFolder(cwd)
+            } catch (error: Exception) {
+                if (isCurrent(token)) pushNotice(error.message ?: "Kunne ikke sjekke mappen", "error")
+                null
+            }
+            if (!isSessionOpCurrent(op, token)) return@launch
+            if (folder == null) {
+                pushNotice("Mappen finnes ikke på PC-en: $cwd", "error")
+                return@launch
+            }
+            openNewChat(folder.path, token = token, op = op)
+        }
+    }
+
+    /**
+     * Open the conversation the bridge itself has loaded most recently.
+     * This is the only "active" chat the bridge can prove; the phone's own
+     * last selection is not proof that OMP still has it open.
+     */
+    fun openActiveBridgeSession() {
+        val token = epoch
+        scope.launch {
+            if (!isCurrent(token)) return@launch
+            try {
+                val active = client.activeSession()
+                if (!isCurrent(token)) return@launch
+                if (active == null) {
+                    pushNotice("Ingen aktiv Bridge-samtale", "warning")
+                    return@launch
+                }
+                val known = _state.value.sessions.firstOrNull { it.file == active.sessionFile }
+                    ?: _state.value.archivedSessions.firstOrNull { it.file == active.sessionFile }
+                val summary = known ?: SessionSummary(
+                    id = active.sessionId,
+                    file = active.sessionFile,
+                    cwd = active.cwd,
+                    title = "",
+                    model = "",
+                    messageCount = 0,
+                    toolCount = 0,
+                    updatedAt = active.lastUsed,
+                    archived = false
+                )
+                openSession(summary)
+            } catch (error: Exception) {
+                if (isCurrent(token)) {
+                    pushNotice(error.message ?: "Kunne ikke hente aktiv Bridge-samtale", "error")
+                }
+            }
         }
     }
 
@@ -614,15 +941,17 @@ class ChatRepository(private val settings: SettingsStore) {
      * the one the user picked. Re-apply the remembered choice so the header and
      * the settings row keep showing the selected model.
      */
-    private suspend fun applyRememberedModel(cwd: String) {
+    private suspend fun applyRememberedModel(cwd: String, token: Int = epoch) {
         val saved = settings.state.value
         if (saved.lastModelProvider.isBlank() || saved.lastModelId.isBlank()) return
         try {
             val available = client.models(cwd)
+            if (!isCurrent(token)) return
             val target = available.firstOrNull {
                 it.provider == saved.lastModelProvider && it.id == saved.lastModelId
             } ?: return
             val applied = client.setModel(cwd, target) ?: target
+            if (!isCurrent(token)) return
             _state.update { it.copy(chat = it.chat.copy(model = applied), models = available) }
         } catch (_: Exception) {
             // A missing model must never block a new conversation.
@@ -631,15 +960,17 @@ class ChatRepository(private val settings: SettingsStore) {
 
     fun rename(file: String, name: String) {
         if (file.isBlank() || name.isBlank()) return
+        val token = epoch
         scope.launch {
             try {
                 client.renameSession(file, name.trim())
+                if (!isCurrent(token)) return@launch
                 _state.update { st ->
                     if (st.sessionFile == file) st.copy(title = name.trim()) else st
                 }
                 loadSessions()
             } catch (error: Exception) {
-                pushNotice(error.message ?: "Kunne ikke gi nytt navn", "error")
+                if (isCurrent(token)) pushNotice(error.message ?: "Kunne ikke gi nytt navn", "error")
             }
         }
     }
@@ -665,31 +996,35 @@ class ChatRepository(private val settings: SettingsStore) {
     }
 
     fun archive(file: String, archived: Boolean) {
+        val token = epoch
         scope.launch {
             try {
                 client.archiveSession(file, archived)
-                loadSessions()
+                if (!isCurrent(token)) return@launch
+                loadSessions(token)
                 if (archived && _state.value.sessionFile == file) {
                     _state.update { it.copy(sessionFile = "", title = "", messages = emptyList()) }
                 }
             } catch (error: Exception) {
-                pushNotice(error.message ?: "Kunne ikke arkivere", "error")
+                if (isCurrent(token)) pushNotice(error.message ?: "Kunne ikke arkivere", "error")
             }
         }
     }
 
     fun delete(file: String) {
+        val token = epoch
         scope.launch {
             try {
                 client.deleteSession(file)
-                settings.rememberLast(_state.value.cwd, "")
+                if (!isCurrent(token)) return@launch
+                rememberLast(_state.value.cwd, "")
                 if (_state.value.sessionFile == file) {
                     synchronized(lock) { messages.clear() }
                     _state.update { it.copy(sessionFile = "", title = "", messages = emptyList(), chat = ChatState()) }
                 }
-                loadSessions()
+                loadSessions(token)
             } catch (error: Exception) {
-                pushNotice(error.message ?: "Kunne ikke slette samtalen", "error")
+                if (isCurrent(token)) pushNotice(error.message ?: "Kunne ikke slette samtalen", "error")
             }
         }
     }
@@ -703,10 +1038,11 @@ class ChatRepository(private val settings: SettingsStore) {
 
     fun setModel(model: ModelInfo) {
         val cwd = resolvedCwd()
-        if (cwd.isBlank()) {
-            pushNotice("Velg en prosjektmappe først", "warning")
+        if (!CwdPath.isUsable(cwd) || _state.value.readOnly) {
+            pushNotice("Velg en gyldig prosjektmappe først", "warning")
             return
         }
+        val token = epoch
         // Show and keep the choice immediately. A slow or blocked OMP runtime
         // must not make the selection look like it was reset.
         settings.rememberModel(model.provider, model.id, model.name)
@@ -719,9 +1055,11 @@ class ChatRepository(private val settings: SettingsStore) {
         scope.launch {
             try {
                 val applied = client.setModel(cwd, model) ?: model
+                if (!isCurrent(token)) return@launch
                 settings.rememberModel(applied.provider, applied.id, applied.name)
                 _state.update { it.copy(chat = it.chat.copy(model = applied)) }
             } catch (error: Exception) {
+                if (!isCurrent(token)) return@launch
                 var fb = fallbackModel
                 if (fb == null && fallbackModelKey.isNotBlank()) {
                     fb = _state.value.models.firstOrNull { it.key == fallbackModelKey }
@@ -729,6 +1067,7 @@ class ChatRepository(private val settings: SettingsStore) {
                 if (fb != null && fb.key != model.key) {
                     try {
                         val applied = client.setModel(cwd, fb) ?: fb
+                        if (!isCurrent(token)) return@launch
                         settings.rememberModel(applied.provider, applied.id, applied.name)
                         _state.update { it.copy(chat = it.chat.copy(model = applied)) }
                         pushNotice("Byttet til reservemodell: ${applied.name}", "warning")
@@ -849,12 +1188,16 @@ class ChatRepository(private val settings: SettingsStore) {
 
     /** Hent tale-motorlisten fra bridgen. */
     fun loadVoiceEngines() {
+        val token = epoch
         scope.launch {
             try {
                 val engines = client.voiceEngineList()
+                if (!isCurrent(token)) return@launch
                 _state.update { it.copy(voiceEngines = engines) }
             } catch (error: Exception) {
-                pushNotice("Kunne ikke hente tale-motorer: ${error.message}", "error")
+                if (isCurrent(token)) {
+                    pushNotice("Kunne ikke hente tale-motorer: ${error.message}", "error")
+                }
             }
         }
     }
@@ -862,14 +1205,22 @@ class ChatRepository(private val settings: SettingsStore) {
     fun send(text: String, images: List<String> = emptyList(), attachments: List<Upload> = emptyList()) {
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return
+        val token = epoch
         scope.launch {
-            val cwd = resolvedCwd()
-            if (cwd.isBlank()) {
-                pushNotice("Velg en prosjektmappe først", "warning")
+            if (!isCurrent(token)) return@launch
+            if (_state.value.readOnly) {
+                pushNotice("Denne samtalen er skrivebeskyttet. Start en ny samtale i en gyldig mappe.", "warning")
                 return@launch
             }
             if (!ensureSession()) return@launch
-            val file = _state.value.sessionFile
+            if (!isCurrent(token)) return@launch
+            val current = _state.value
+            val cwd = current.cwd.takeIf { CwdPath.isUsable(it) } ?: resolvedCwd()
+            if (!CwdPath.isUsable(cwd)) {
+                pushNotice("Velg en prosjektmappe først", "warning")
+                return@launch
+            }
+            val file = current.sessionFile
             val localId = "local-${System.currentTimeMillis()}"
             synchronized(lock) {
                 messages += ChatMessage(
@@ -892,12 +1243,15 @@ class ChatRepository(private val settings: SettingsStore) {
             try {
                 val note = if (attachments.isNotEmpty()) {
                     val saved = client.uploadFiles(cwd, attachments.map { Triple(it.name, it.mime, it.base64) })
+                    if (!isCurrent(token)) return@launch
                     saved.joinToString("\n") { "- `$it`" }
                 } else ""
                 val body = if (note.isNotEmpty()) "$trimmed\n\nVedlagte filer (ligger i prosjektmappen):\n$note" else trimmed
-                client.prompt(cwd, file, body, images)
+                client.prompt(cwd, file.ifBlank { null }, body, images)
+                if (!isCurrent(token)) return@launch
                 markLocalUser(localId, "done")
             } catch (error: Exception) {
+                if (!isCurrent(token)) return@launch
                 markLocalUser(localId, "error")
                 _state.update { it.copy(streaming = false) }
                 pushNotice(error.message ?: "Kunne ikke sende meldingen", "error")
@@ -907,13 +1261,15 @@ class ChatRepository(private val settings: SettingsStore) {
 
     fun stop() {
         val cwd = _state.value.cwd
-        if (cwd.isBlank()) return
+        if (!CwdPath.isUsable(cwd) || _state.value.readOnly) return
+        val token = epoch
         scope.launch {
             try {
                 client.abort(cwd)
             } catch (error: Exception) {
-                pushNotice(error.message ?: "Kunne ikke stoppe", "error")
+                if (isCurrent(token)) pushNotice(error.message ?: "Kunne ikke stoppe", "error")
             }
+            if (!isCurrent(token)) return@launch
             _state.update { it.copy(streaming = false) }
             synchronized(lock) {
                 val lastUser = messages.indexOfLast { it.isUser }
@@ -957,9 +1313,14 @@ class ChatRepository(private val settings: SettingsStore) {
     }
 
     private fun branchAndPrompt(entryId: String, text: String) {
+        if (_state.value.readOnly) {
+            pushNotice("Denne samtalen er skrivebeskyttet.", "warning")
+            return
+        }
         val cwd = _state.value.cwd
         val file = _state.value.sessionFile
-        if (cwd.isBlank() || file.isBlank() || entryId.isBlank() || text.isBlank()) return
+        if (!CwdPath.isUsable(cwd) || file.isBlank() || entryId.isBlank() || text.isBlank()) return
+        val token = epoch
         val index = _state.value.messages.indexOfFirst { it.id == entryId }
         if (index < 0) return
         synchronized(lock) {
@@ -985,8 +1346,10 @@ class ChatRepository(private val settings: SettingsStore) {
         scope.launch {
             try {
                 client.regenerate(cwd, file, entryId, text)
+                if (!isCurrent(token)) return@launch
                 markLocalUser(localId, "done")
             } catch (error: Exception) {
+                if (!isCurrent(token)) return@launch
                 markLocalUser(localId, "error")
                 _state.update { it.copy(streaming = false) }
                 pushNotice(error.message ?: "Kunne ikke kjøre på nytt", "error")
@@ -1006,11 +1369,12 @@ class ChatRepository(private val settings: SettingsStore) {
         answers: List<Pair<String, List<String>>>? = null
     ) {
         _state.update { it.copy(request = null) }
+        val token = epoch
         scope.launch {
             try {
                 client.answer(request, value = value, confirmed = confirmed, cancelled = cancelled, answers = answers)
             } catch (error: Exception) {
-                pushNotice(error.message ?: "Kunne ikke svare OMP", "error")
+                if (isCurrent(token)) pushNotice(error.message ?: "Kunne ikke svare OMP", "error")
             }
         }
     }
@@ -1018,7 +1382,8 @@ class ChatRepository(private val settings: SettingsStore) {
     fun runTerminal(command: String) {
         val cwd = _state.value.cwd
         val trimmed = command.trim()
-        if (cwd.isBlank() || trimmed.isEmpty()) return
+        if (!CwdPath.isUsable(cwd) || trimmed.isEmpty() || _state.value.readOnly) return
+        val token = epoch
         val id = ++terminalSeq
         _state.update {
             it.copy(terminal = it.terminal + TerminalEntry(id = id, command = trimmed, running = true))
@@ -1026,6 +1391,7 @@ class ChatRepository(private val settings: SettingsStore) {
         scope.launch {
             try {
                 val result = client.bash(cwd, trimmed)
+                if (!isCurrent(token)) return@launch
                 val output = result.str("output")
                 _state.update { st ->
                     st.copy(
@@ -1040,6 +1406,7 @@ class ChatRepository(private val settings: SettingsStore) {
                     )
                 }
             } catch (error: Exception) {
+                if (!isCurrent(token)) return@launch
                 _state.update { st ->
                     st.copy(
                         terminal = st.terminal.map { entry ->
@@ -1081,12 +1448,13 @@ class ChatRepository(private val settings: SettingsStore) {
         return match?.value
     }
 
-    private fun handle(event: Event) {
+    private fun handle(event: Event, token: Int = epoch) {
+        if (!isCurrent(token)) return
         when (event.type) {
             "connected" -> {
                 _state.update { it.copy(connected = true, error = "") }
                 taskListener?.invoke(TaskEvent.ConnectionRestored())
-                resyncAfterReconnect("sse")
+                resyncAfterReconnect("sse", token)
                 return
             }
             "disconnected" -> {
@@ -1101,16 +1469,19 @@ class ChatRepository(private val settings: SettingsStore) {
             }
             "hello" -> {
                 val state = event.json.obj("state")
-                if (state != null && sameProject(event)) applyState(state)
+                if (state != null && sameProject(event)) applyState(state, token)
                 return
             }
         }
 
+        // While a read-only transcript is on screen no live event from another
+        // runtime may change the message list or the header.
+        if (_state.value.readOnly) return
         if (!sameProject(event)) return
 
         when (event.type) {
             "ready" -> _state.update { it.copy(connected = true) }
-            "state" -> event.json.obj("state")?.let { applyState(it) }
+            "state" -> event.json.obj("state")?.let { applyState(it, token) }
             "models" -> {
                 val models = event.json.arr("models").mapNotNull { it.asObjectOrNull()?.let(Parsers::model) }
                 if (models.isNotEmpty()) _state.update { it.copy(models = models) }
@@ -1197,7 +1568,9 @@ class ChatRepository(private val settings: SettingsStore) {
         }
     }
 
-    private fun applyState(json: JsonObject) {
+    private fun applyState(json: JsonObject, token: Int = epoch) {
+        if (!isCurrent(token)) return
+        if (_state.value.readOnly) return
         val parsed = Parsers.state(json)
         val title = parsed.sessionName.ifBlank { _state.value.title }
         _state.update { st ->
@@ -1437,12 +1810,24 @@ class ChatRepository(private val settings: SettingsStore) {
     }
 
     fun reloadTranscript() {
-        val file = _state.value.sessionFile
+        val snapshot = _state.value
+        // A read-only chat has no runtime session; its stored file is the only
+        // source of truth.
+        val file = if (snapshot.readOnly) snapshot.readOnlyFile else snapshot.sessionFile
         if (file.isBlank()) return
+        val token = epoch
         scope.launch {
             try {
                 val (session, transcript) = client.transcript(file)
+                if (!isCurrent(token)) return@launch
                 if (transcript.isEmpty()) return@launch
+                val current = _state.value
+                val stillSame = if (current.readOnly) {
+                    current.readOnlyFile == file
+                } else {
+                    current.sessionFile == file
+                }
+                if (!stillSame) return@launch
                 synchronized(lock) {
                     messages.clear()
                     messages.addAll(transcript)
@@ -1547,11 +1932,8 @@ class ChatRepository(private val settings: SettingsStore) {
         val current = _state.value.cwd
         if (eventCwd.isBlank()) return true
         if (current.isBlank()) return true
-        return normalise(eventCwd) == normalise(current)
+        return CwdPath.same(eventCwd, current)
     }
-
-    private fun normalise(path: String): String =
-        path.trim().trimEnd('\\', '/').replace('/', '\\').lowercase()
 
     fun pushNotice(text: String, level: String = "info") {
         if (text.isBlank()) return

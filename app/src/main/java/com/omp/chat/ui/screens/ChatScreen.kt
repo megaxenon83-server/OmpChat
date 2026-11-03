@@ -151,6 +151,11 @@ fun ChatScreen(
     onTogglePinMessage: (String) -> Unit = {},
     onPinnedMessageClicked: (String) -> Unit = {},
     onOpenActiveChat: () -> Unit = {},
+    onOpenCleanup: () -> Unit = {},
+    pcName: String = "PC",
+    loadActiveBridge: suspend () -> com.omp.chat.data.ActiveBridgeSession? = { null },
+    animatedActive: Boolean = true,
+    onOpenProjectHistory: (String) -> Unit = {},
     onReconnect: () -> Unit,
     onReloadModels: () -> Unit,
     onClearTerminal: () -> Unit,
@@ -304,7 +309,12 @@ fun ChatScreen(
                     onCloseDrawer = { scope.launch { drawerState.close() } },
                     onToggleFavorite = onToggleFavorite,
                     isFavorite = isFavorite,
-                    onOpenActiveChat = onOpenActiveChat
+                    onOpenActiveChat = onOpenActiveChat,
+                    onOpenCleanup = onOpenCleanup,
+                    pcName = pcName,
+                    loadActiveBridge = loadActiveBridge,
+                    animatedActive = animatedActive,
+                    onOpenProjectHistory = onOpenProjectHistory
                 )
             }
         }
@@ -500,6 +510,36 @@ fun ChatScreen(
                     )
                     TextButton(onClick = onReconnect) {
                         Text(strings.reconnect, style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        }
+
+        if (state.readOnly) {
+            Surface(
+                color = NimayAccent.copy(alpha = 0.14f),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                    .border(1.dp, NimayAccent.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Default.Warning, contentDescription = null, tint = NimayAccent, modifier = Modifier.size(15.dp))
+                    Text(
+                        text = state.readOnlyReason.ifBlank {
+                            "Samtalen vises skrivebeskyttet."
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = NimayTextSecondary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = onNewChat) {
+                        Text(strings.newChat, style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }
