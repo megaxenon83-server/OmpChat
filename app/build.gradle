@@ -18,8 +18,8 @@ android {
         applicationId "com.omp.chat"
         minSdk 24
         targetSdk 34
-        versionCode 81
-        versionName "2.9.56"
+        versionCode 82
+        versionName "2.9.57"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }

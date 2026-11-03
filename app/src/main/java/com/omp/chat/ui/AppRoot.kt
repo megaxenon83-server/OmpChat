@@ -218,9 +218,12 @@ fun AppRoot(
                                     // Scrolling håndteres internt i ChatScreen
                                 },
                                 onOpenActiveChat = {
-                                    val activeSession = state.sessions.firstOrNull { it.file == state.sessionFile }
+                                    screen = Screen.Chat
+                                     val activeSession = state.sessions.firstOrNull { it.file == state.sessionFile }
                                     if (activeSession != null) {
                                         viewModel.repository.openSession(activeSession)
+                                    } else if (state.sessionFile.isNotBlank()) {
+                                        viewModel.repository.openSessionByFile(state.sessionFile)
                                     }
                                 },
                                 onReconnect = { viewModel.repository.connect() },
@@ -235,6 +238,7 @@ fun AppRoot(
                                 onToast = { viewModel.toast(it) },
                                 onOpenSession = { session ->
                                     viewModel.repository.openSession(session)
+                                     screen = Screen.Chat
                                 },
                                 onRenameSession = { renameTarget = it },
                                 onArchiveSession = { session, archived ->
@@ -243,6 +247,7 @@ fun AppRoot(
                                 onDeleteSession = { deleteTarget = it },
                                 onSelectProject = { cwd ->
                                     viewModel.repository.newChat(cwd)
+                                     screen = Screen.Chat
                                 },
                                 onToggleFavorite = { viewModel.repository.toggleFavorite(it) },
                                 isFavorite = { viewModel.repository.isFavorite(it) }

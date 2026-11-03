@@ -104,7 +104,7 @@ fun ChatGptDrawerContent(
 
     val currentProjectName = remember(state.projects, state.cwd) {
         state.projects.firstOrNull { it.path.equals(state.cwd, ignoreCase = true) }?.name
-            ?: fileName(state.cwd).ifBlank { strings.project }
+            ?: run { val n = fileName(state.cwd); if (n.length == 2 && n[1] == ':') state.cwd else n.ifBlank { strings.project } }
     }
 
     Column(
@@ -277,6 +277,7 @@ fun ChatGptDrawerContent(
                             onClick = {
                                 projectMenuOpen = false
                                 onSelectProject(project.path)
+                                onCloseDrawer()
                             }
                         )
                     }
@@ -601,7 +602,10 @@ fun ChatGptDrawerContent(
 
                 // Gå til aktiv chat på PC
                 IconButton(
-                    onClick = onOpenActiveChat,
+                     onClick = {
+                         onOpenActiveChat()
+                         onCloseDrawer()
+                     },
                     modifier = Modifier.size(36.dp)
                 ) {
                     Icon(

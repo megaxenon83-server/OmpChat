@@ -894,7 +894,7 @@ Rettelser:
 
 **Ikke fysisk testet:** Ingen fysisk Android-enhet tilgjengelig.
 
-## 2.9.46 — 2026-11-01
+## 2.9.46 ï¿½ 2026-11-01
 
 **Root cause found and fixed: SecureStore.put() ArrayIndexOutOfBoundsException**
 
@@ -923,8 +923,8 @@ This caused ArrayIndexOutOfBoundsException: src.length=64 srcPos=12 dst.length=7
 - Models and projects load: PASS
 
 **Changed files:**
-- pp/src/main/java/com/omp/chat/data/SecureStore.kt — fixed System.arraycopy source offset
-- pp/build.gradle — versionCode 71, versionName 2.9.46
+- pp/src/main/java/com/omp/chat/data/SecureStore.kt ï¿½ fixed System.arraycopy source offset
+- pp/build.gradle ï¿½ versionCode 71, versionName 2.9.46
 
 **APK:** OmpChat-2.9.46 (code 71), SHA-256 40631FBF3253E7183F06222E2AEB326743FEE5D9D6A3C9DBB913E4E09281523F
 
@@ -938,7 +938,7 @@ This caused ArrayIndexOutOfBoundsException: src.length=64 srcPos=12 dst.length=7
 - Marked Linux Flatpak as untested in README.md
 - Published to GitHub: https://github.com/megaxenon83-server/OmpChat
 
-## 2.9.49 — 2026-11-02
+## 2.9.49 ï¿½ 2026-11-02
 
 **Resource monitor: discreet icon button**
 
@@ -977,7 +977,7 @@ Fixed: Changed source offset from cipher.iv.size to 0.
 - Nginx reloaded
 - GitHub pushed
 
-## 2.9.50 — 2026-11-02
+## 2.9.50 ï¿½ 2026-11-02
 
 **Fix: resource monitor button layout shift + on-demand load**
 
@@ -1000,23 +1000,23 @@ Fixed: Changed source offset from cipher.iv.size to 0.
 - index.html updated
 - Nginx reloaded
 
-## 2.9.51 — 2026-11-02
+## 2.9.51 ï¿½ 2026-11-02
 
 **Fix: resource monitor popup viser ekte data + ingen layout-forskrivning**
 
-### Rotårsak funnet (faktisk, ikke gjett)
-Logcat bevis at dataflyten fungerte hele tiden: loadResources() kalles, /api/resources returnerer gyldig JSON (cpu=3, ram=34, gpu=0), parsing lykkes, og _state oppdateres (esources=true). Feilen var at Popup-innholdet i Compose ikke pålitelig rekomponerte når esources endret seg — popup-en heng på "Laster ressurser..." selv etter at data var hentet.
+### Rotï¿½rsak funnet (faktisk, ikke gjett)
+Logcat bevis at dataflyten fungerte hele tiden: loadResources() kalles, /api/resources returnerer gyldig JSON (cpu=3, ram=34, gpu=0), parsing lykkes, og _state oppdateres (esources=true). Feilen var at Popup-innholdet i Compose ikke pï¿½litelig rekomponerte nï¿½r esources endret seg ï¿½ popup-en heng pï¿½ "Laster ressurser..." selv etter at data var hentet.
 
 ### Fiks (kun ressursmonitor-knappen)
-- Popup rendres via Compose Popup (overlay-vindu): påvirker ikke header-radens måling ? chip holder 32dp, **flytter seg ikke ved trykk**.
-- Popup-innholdet rekomponeres når esources endres ? viser ekte CPU/RAM/GPU-data så snart de er tilgjengelig.
-- On-demand lasting: chip kaller loadResources() ved åpning (i tillegg til 30s-polling).
-- Feilsøkningslogg: const val DEBUG = false i ResourceMonitor.kt (tag "OmpChat"), slå på for midlertidig logg.
+- Popup rendres via Compose Popup (overlay-vindu): pï¿½virker ikke header-radens mï¿½ling ? chip holder 32dp, **flytter seg ikke ved trykk**.
+- Popup-innholdet rekomponeres nï¿½r esources endres ? viser ekte CPU/RAM/GPU-data sï¿½ snart de er tilgjengelig.
+- On-demand lasting: chip kaller loadResources() ved ï¿½pning (i tillegg til 30s-polling).
+- Feilsï¿½kningslogg: const val DEBUG = false i ResourceMonitor.kt (tag "OmpChat"), slï¿½ pï¿½ for midlertidig logg.
 
 ### Endrede filer
 - app/src/main/java/com/omp/chat/ui/components/ResourceMonitor.kt - Popup + onRefresh + DEBUG-logg
-- app/src/main/java/com/omp/chat/ui/screens/ChatScreen.kt - onLoadResources-param (var allerede på plass)
-- app/src/main/java/com/omp/chat/ui/AppRoot.kt - onLoadResources koblet til loadResources (var allerede på plass)
+- app/src/main/java/com/omp/chat/ui/screens/ChatScreen.kt - onLoadResources-param (var allerede pï¿½ plass)
+- app/src/main/java/com/omp/chat/ui/AppRoot.kt - onLoadResources koblet til loadResources (var allerede pï¿½ plass)
 - app/build.gradle - versjon 2.9.51 (code 76)
 
 ### APK
@@ -1029,19 +1029,19 @@ Logcat bevis at dataflyten fungerte hele tiden: loadResources() kalles, /api/res
 - Nginx reloadet
 - Nedlastingslenke verifisert (HTTP 200, SHA-256 matcher)
 
-## 2.9.52 — 2026-11-02
+## 2.9.52 ï¿½ 2026-11-02
 
-**Fix: app kan oppdateres uten avinstallasjon (samme signering på debug og release)**
+**Fix: app kan oppdateres uten avinstallasjon (samme signering pï¿½ debug og release)**
 
 ### Problem
-Debug-APK signeres med Androids standard debug-nøkkel, release-APK med ompchat-release.jks. Ulik signering betyr at Android nektar oppdatering — man må avinstallere før man kan installere ny versjon.
+Debug-APK signeres med Androids standard debug-nï¿½kkel, release-APK med ompchat-release.jks. Ulik signering betyr at Android nektar oppdatering ï¿½ man mï¿½ avinstallere fï¿½r man kan installere ny versjon.
 
 ### Fiks
-- debug build type bruker nå samme signingConfigs.release som elease ? begge signeres med ompchat-release.jks
-- Oppdatering fungerer nå uten å avinstallere først
+- debug build type bruker nï¿½ samme signingConfigs.release som elease ? begge signeres med ompchat-release.jks
+- Oppdatering fungerer nï¿½ uten ï¿½ avinstallere fï¿½rst
 
 ### Endrede filer
-- app/build.gradle - debug build type får signingConfig release; versjon 2.9.52 (code 77)
+- app/build.gradle - debug build type fï¿½r signingConfig release; versjon 2.9.52 (code 77)
 
 ### APK
 - OmpChat-2.9.52.apk (13,466,106 B, SHA-256: 11DD577D724E706F9DBEB588D4D113C627C9174DBE413525E8C4E56E84CA7D43)
@@ -1052,3 +1052,11 @@ Debug-APK signeres med Androids standard debug-nøkkel, release-APK med ompchat-r
 - index.html oppdatert
 - Nginx reloadet
 - Nedlastingslenke verifisert (HTTP 200, SHA-256 matcher)
+
+## 2.9.57 (code 82) - Sidebar fixes
+- Fixed onOpenActiveChat: sets screen=Screen.Chat, closes drawer, falls back to openSessionByFile
+- Fixed onOpenSession (ChatScreen): sets screen=Screen.Chat
+- Fixed onSelectProject: sets screen=Screen.Chat, closes drawer
+- Fixed ChatGptDrawer: closes drawer after onOpenActiveChat and onSelectProject
+- Fixed currentProjectName: shows full path instead of 'C:' for Windows drive letters
+- Build verified: assembleRelease SUCCESS
