@@ -15,6 +15,7 @@ data class AppSettings(
     val haptics: Boolean = true,
     val notifications: Boolean = true,
     val showThinking: Boolean = false,
+    val activityDetailLevel: Int = 0, // 0 = minimal, 1 = extended
     val speechLanguage: String = "nb-NO",
     val lastCwd: String = "",
     val lastSession: String = "",
@@ -74,6 +75,7 @@ class SettingsStore(context: Context) {
         haptics = prefs.getBoolean(KEY_HAPTICS, true),
         notifications = prefs.getBoolean(KEY_NOTIFICATIONS, true),
         showThinking = prefs.getBoolean(KEY_THINKING, false),
+        activityDetailLevel = prefs.getInt(KEY_ACTIVITY_DETAIL, 0),
         speechLanguage = prefs.getString(KEY_SPEECH, "nb-NO") ?: "nb-NO",
         lastCwd = prefs.getString(KEY_LAST_CWD, "") ?: "",
         lastSession = prefs.getString(KEY_LAST_SESSION, "") ?: "",
@@ -142,6 +144,11 @@ class SettingsStore(context: Context) {
 
     fun setShowThinking(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_THINKING, enabled).apply()
+        refresh()
+    }
+
+    fun setActivityDetailLevel(level: Int) {
+        prefs.edit().putInt(KEY_ACTIVITY_DETAIL, level.coerceIn(0, 1)).apply()
         refresh()
     }
 
@@ -257,6 +264,7 @@ class SettingsStore(context: Context) {
         private const val KEY_HAPTICS = "haptics"
         private const val KEY_NOTIFICATIONS = "notifications"
         private const val KEY_THINKING = "show_thinking"
+        private const val KEY_ACTIVITY_DETAIL = "activity_detail_level"
         private const val KEY_SPEECH = "speech_lang"
         private const val KEY_LAST_CWD = "last_cwd"
         private const val KEY_LAST_SESSION = "last_session"

@@ -113,7 +113,8 @@ fun SettingsScreen(
     onGotifyTest: () -> Boolean = { false },
     onOpenGotify: () -> Unit = {},
     onResourceMonitorEnabled: (Boolean) -> Unit = {},
-    onPinMessagesEnabled: (Boolean) -> Unit = {}
+    onPinMessagesEnabled: (Boolean) -> Unit = {},
+    onActivityDetailLevel: (Int) -> Unit = {}
 ) {
     val strings = LocalStrings.current
     val scope = rememberCoroutineScope()
@@ -345,6 +346,26 @@ fun SettingsScreen(
                 SwitchRow("PC-ressursmonitor", "Vis CPU, RAM og GPU i chatten", settings.resourceMonitorEnabled, onResourceMonitorEnabled)
                 // Heft meldinger
                 SwitchRow("Heft meldinger", "Heft viktige meldinger øverst i chatten", settings.pinMessagesEnabled, onPinMessagesEnabled)
+                // Aktivitetsdetaljer
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Vis aktivitetsdetaljer", color = NimayTextPrimary, style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            if (settings.activityDetailLevel == 0) "Minimalt (standard)" else "Utvidet",
+                            color = NimayTextSecondary,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                    androidx.compose.material3.Switch(
+                        checked = settings.activityDetailLevel == 1,
+                        onCheckedChange = { onActivityDetailLevel(if (it) 1 else 0) }
+                    )
+                }
                 Row(
                     Modifier.fillMaxWidth().padding(vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically

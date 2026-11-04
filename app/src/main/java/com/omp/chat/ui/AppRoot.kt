@@ -174,7 +174,7 @@ fun AppRoot(
                                     viewModel.clearAttachments()
                                     list.forEach { viewModel.addAttachment(it) }
                                 },
-                                showThinking = settings.showThinking,
+                                showThinking = settings.showThinking || settings.activityDetailLevel == 1,
                                 speechText = speechText,
                                 onSpeechConsumed = onSpeechConsumed,
                                 onBack = { screen = Screen.Chats },
@@ -304,7 +304,8 @@ fun AppRoot(
                                 onGotifyTest = { viewModel.testGotify() },
                                 onOpenGotify = { screen = Screen.Gotify },
                                 onResourceMonitorEnabled = { viewModel.settings.setResourceMonitorEnabled(it) },
-                                onPinMessagesEnabled = { viewModel.settings.setPinMessagesEnabled(it) }
+                                onPinMessagesEnabled = { viewModel.settings.setPinMessagesEnabled(it) },
+                                onActivityDetailLevel = { viewModel.settings.setActivityDetailLevel(it) }
                             )
 
                             Screen.ProjectHistory -> com.omp.chat.ui.screens.ProjectHistoryScreen(
