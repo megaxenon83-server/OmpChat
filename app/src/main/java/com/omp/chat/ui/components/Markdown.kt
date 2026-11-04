@@ -369,41 +369,43 @@ fun MarkdownText(
 ) {
     val blocks = remember(text) { MarkdownParser.parse(text) }
     val scheme = MaterialTheme.colorScheme
-    val bodyStyle = if (compact) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge
+    val bodyStyle = if (compact) MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp) else MaterialTheme.typography.bodyLarge.copy(lineHeight = 26.sp)
 
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 10.dp)) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 12.dp)) {
         blocks.forEach { block ->
             when (block) {
                 is MdBlock.Heading -> Text(
                     text = MarkdownParser.inline(block.text, NimaySidebar, NimayAccent),
                     style = when (block.level) {
-                        1 -> MaterialTheme.typography.titleLarge
-                        2 -> MaterialTheme.typography.titleMedium
-                        else -> MaterialTheme.typography.titleSmall
+                        1 -> MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold, lineHeight = 32.sp)
+                        2 -> MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold, lineHeight = 28.sp)
+                        else -> MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, lineHeight = 24.sp)
                     },
-                    color = NimayTextPrimary
+                    color = NimayTextPrimary,
+                    modifier = Modifier.padding(top = if (block.level == 1) 8.dp else 4.dp)
                 )
 
                 is MdBlock.Paragraph -> Text(
                     text = MarkdownParser.inline(block.text, NimaySidebar, NimayAccent),
-                    style = bodyStyle,
+                    style = bodyStyle.copy(lineHeight = if (compact) 22.sp else 26.sp),
                     color = NimayTextPrimary
                 )
 
-                is MdBlock.Bullets -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                is MdBlock.Bullets -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     block.items.forEachIndexed { index, item ->
                         Row(modifier = Modifier.fillMaxWidth()) {
                             Text(
                                 text = if (block.ordered) "${index + 1}." else "•",
                                 style = bodyStyle,
                                 color = NimayTextSecondary,
-                                modifier = Modifier.width(if (block.ordered) 24.dp else 16.dp)
+                                modifier = Modifier.width(if (block.ordered) 28.dp else 20.dp)
                             )
                             Text(
                                 text = MarkdownParser.inline(item, NimaySidebar, NimayAccent),
                                 style = bodyStyle,
                                 color = NimayTextPrimary,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f),
+                                lineHeight = 26.sp
                             )
                         }
                     }

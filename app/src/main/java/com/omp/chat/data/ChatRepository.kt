@@ -31,6 +31,7 @@ data class RepoState(
     val chat: ChatState = ChatState(),
     val streaming: Boolean = false,
     val streamingStartedAt: Long = 0,
+    val queuedMessageIds: Set<String> = emptySet(),
     val cwd: String = "",
     val sessionFile: String = "",
     val activeBridgeSession: com.omp.chat.data.ActiveBridgeSession? = null,
@@ -1241,7 +1242,9 @@ class ChatRepository(private val settings: SettingsStore) {
                 }
             }
             publish()
-            _state.update { it.copy(streaming = true, streamingStartedAt = System.currentTimeMillis()) }
+            if (streamingBehavior == "followUp") {
+                _state.update { it.copy(queuedMessageIds = it.queuedMessageIds + localId) }
+            }
             try {
                 val note = if (attachments.isNotEmpty()) {
                     val saved = client.uploadFiles(cwd, attachments.map { Triple(it.name, it.mime, it.base64) })
@@ -1251,7 +1254,11 @@ class ChatRepository(private val settings: SettingsStore) {
                 val body = if (note.isNotEmpty()) "$trimmed\n\nVedlagte filer (ligger i prosjektmappen):\n$note" else trimmed
                 client.prompt(cwd, file.ifBlank { null }, body, images, streamingBehavior)
                 if (!isCurrent(token)) return@launch
-                markLocalUser(localId, "done")
+                if (streamingBehavior == "followUp") {
+                    markLocalUser(localId, "queued")
+                } else {
+                    markLocalUser(localId, "done")
+                }
             } catch (error: Exception) {
                 if (!isCurrent(token)) return@launch
                 markLocalUser(localId, "error")
@@ -1838,6 +1845,7 @@ class ChatRepository(private val settings: SettingsStore) {
                     dirty = true
                 }
                 publish()
+                _state.update { it.copy(queuedMessageIds = emptySet()) }
                 if (session != null && _state.value.title.isBlank()) {
                     _state.update { it.copy(title = session.title) }
                 }

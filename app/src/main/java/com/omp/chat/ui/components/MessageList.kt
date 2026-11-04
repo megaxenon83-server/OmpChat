@@ -232,6 +232,11 @@ private fun UserMessage(
                     style = MaterialTheme.typography.labelSmall,
                     color = NimayTextSecondary
                 )
+                "queued" -> Text(
+                    "I kø",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = NimayAccent
+                )
                 "error" -> Text(
                     strings.errorGeneric,
                     style = MaterialTheme.typography.labelSmall,
