@@ -208,3 +208,10 @@ MIT License — see [LICENSE](LICENSE) for details.
 - Android: OmpChat 2.9.60 (versionCode 85)
 - Windows installer: NimayOMP-Setup 3.2.2 (Bridge 2.9.12)
 - Release: https://github.com/megaxenon83-server/OmpChat/releases/tag/v2.9.60
+
+## Installation
+Download the latest installer from GitHub Releases:
+https://github.com/megaxenon83-server/OmpChat/releases
+
+Windows: Nimay-OMP-Bridge-Setup.exe
+Android: OmpChat-*.apk
