@@ -82,3 +82,13 @@ Ingen full serveromstart utfort (ikke godkjent).
 ### Sikkerhetskopier
 - /root/ssh-recovery-backup-<timestamp>/
 - /etc/ssh/sshd_config.bak.sshrecovery
+
+## Hotfix – OMP binary discovery (2.9.16)
+- Rotårsak: ~/.bun/bin/omp.exe er en Bun-shim (8KB) som ikke finner node_modules når den kjøres fra en annen kontekst.
+- Fiks: Bridge og ompserver bruker nå Bun direkte med cli.js i stedet for den ødelagte shimmen.
+- Bridge 2.9.16, installer 3.2.7.
+
+## Nimay OMP Bridge Cleanup Tool
+- Selvstendig EXE: Nimay-OMP-Bridge-Cleanup.exe
+- SHA-256: B219B7E76E5C5EA3C544CDF22E73BCACCD4BE6EB30427578791BDA14AD79F5B1
+- Publisert under GitHub Release v2.9.73
