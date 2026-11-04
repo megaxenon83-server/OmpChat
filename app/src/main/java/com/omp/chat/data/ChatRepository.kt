@@ -30,6 +30,7 @@ data class RepoState(
     val messages: List<ChatMessage> = emptyList(),
     val chat: ChatState = ChatState(),
     val streaming: Boolean = false,
+    val streamingStartedAt: Long = 0,
     val cwd: String = "",
     val sessionFile: String = "",
     val activeBridgeSession: com.omp.chat.data.ActiveBridgeSession? = null,
@@ -1240,7 +1241,7 @@ class ChatRepository(private val settings: SettingsStore) {
                 }
             }
             publish()
-            _state.update { it.copy(streaming = true) }
+            _state.update { it.copy(streaming = true, streamingStartedAt = System.currentTimeMillis()) }
             try {
                 val note = if (attachments.isNotEmpty()) {
                     val saved = client.uploadFiles(cwd, attachments.map { Triple(it.name, it.mime, it.base64) })
@@ -1254,7 +1255,7 @@ class ChatRepository(private val settings: SettingsStore) {
             } catch (error: Exception) {
                 if (!isCurrent(token)) return@launch
                 markLocalUser(localId, "error")
-                _state.update { it.copy(streaming = false) }
+                _state.update { it.copy(streaming = false, streamingStartedAt = 0) }
                 pushNotice(error.message ?: "Kunne ikke sende meldingen", "error")
             }
         }
@@ -1271,7 +1272,7 @@ class ChatRepository(private val settings: SettingsStore) {
                 if (isCurrent(token)) pushNotice(error.message ?: "Kunne ikke stoppe", "error")
             }
             if (!isCurrent(token)) return@launch
-            _state.update { it.copy(streaming = false) }
+            _state.update { it.copy(streaming = false, streamingStartedAt = 0) }
             synchronized(lock) {
                 val lastUser = messages.indexOfLast { it.isUser }
                 val lastAssistant = messages.indexOfLast { it.isAssistant }
@@ -1343,7 +1344,7 @@ class ChatRepository(private val settings: SettingsStore) {
             dirty = true
         }
         publish()
-        _state.update { it.copy(streaming = true) }
+        _state.update { it.copy(streaming = true, streamingStartedAt = System.currentTimeMillis()) }
         scope.launch {
             try {
                 client.regenerate(cwd, file, entryId, text)
@@ -1352,7 +1353,7 @@ class ChatRepository(private val settings: SettingsStore) {
             } catch (error: Exception) {
                 if (!isCurrent(token)) return@launch
                 markLocalUser(localId, "error")
-                _state.update { it.copy(streaming = false) }
+                _state.update { it.copy(streaming = false, streamingStartedAt = 0) }
                 pushNotice(error.message ?: "Kunne ikke kjøre på nytt", "error")
             }
         }
@@ -1533,7 +1534,7 @@ class ChatRepository(private val settings: SettingsStore) {
                 onToolEnd(event)
             }
             "prompt_result" -> onPromptResult(event)
-            "session_settled" -> _state.update { it.copy(streaming = false) }
+            "session_settled" -> _state.update { it.copy(streaming = false, streamingStartedAt = 0) }
             "ui_request" -> {
                 val request = Parsers.uiRequest(event.json)
                 if (request.id.isNotBlank()) {
@@ -1560,7 +1561,7 @@ class ChatRepository(private val settings: SettingsStore) {
             "backend" -> {
                 if (event.json.str("status") == "offline") {
                     val reason = event.json.str("error")
-                    _state.update { it.copy(streaming = false) }
+                    _state.update { it.copy(streaming = false, streamingStartedAt = 0) }
                     taskListener?.invoke(TaskEvent.Failed(_state.value.sessionFile, reason.ifBlank { "OMP-prosessen stoppet" }))
                     pushNotice(reason.ifBlank { "OMP-prosessen stoppet" }, "error")
                 }
@@ -1626,7 +1627,7 @@ class ChatRepository(private val settings: SettingsStore) {
             dirty = true
         }
         publish()
-        _state.update { it.copy(streaming = true) }
+        _state.update { it.copy(streaming = true, streamingStartedAt = System.currentTimeMillis()) }
     }
 
     private fun onDelta(event: Event) {
@@ -1788,7 +1789,7 @@ class ChatRepository(private val settings: SettingsStore) {
     private fun onPromptResult(event: Event) {
         val status = event.json.str("status")
         val error = event.json.obj("error")
-        _state.update { it.copy(streaming = false) }
+        _state.update { it.copy(streaming = false, streamingStartedAt = 0) }
         synchronized(lock) {
             val index = messages.indexOfLast { it.role == "assistant" }
             if (index >= 0) {

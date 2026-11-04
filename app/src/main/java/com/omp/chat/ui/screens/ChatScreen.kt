@@ -552,6 +552,7 @@ fun ChatScreen(
                 EmptyChat(
                     cwd = state.cwd,
                     streaming = state.streaming,
+                    streamingStartedAt = state.streamingStartedAt,
                     onSuggestion = { draft = it }
                 )
             } else {
@@ -710,16 +711,15 @@ fun ChatScreen(
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun WorkingStatusWithTimer() {
+private fun WorkingStatusWithTimer(startTime: Long) {
     val strings = LocalStrings.current
-    var elapsedSeconds by remember { mutableStateOf(0) }
-    var startTime by remember { mutableStateOf(System.currentTimeMillis()) }
+    var elapsedSeconds by remember(startTime) { mutableStateOf(0) }
 
-    LaunchedEffect(Unit) {
-        startTime = System.currentTimeMillis()
+    LaunchedEffect(startTime) {
+        if (startTime <= 0) return@LaunchedEffect
         while (true) {
-            delay(1000)
             elapsedSeconds = ((System.currentTimeMillis() - startTime) / 1000).toInt()
+            delay(1000)
         }
     }
 
@@ -737,7 +737,7 @@ private fun WorkingStatusWithTimer() {
 }
 
 @Composable
-private fun EmptyChat(cwd: String, streaming: Boolean, onSuggestion: (String) -> Unit) {
+private fun EmptyChat(cwd: String, streaming: Boolean, streamingStartedAt: Long = 0L, onSuggestion: (String) -> Unit) {
     val strings = LocalStrings.current
     Column(
         modifier = Modifier
@@ -791,7 +791,7 @@ private fun EmptyChat(cwd: String, streaming: Boolean, onSuggestion: (String) ->
         }
         if (streaming) {
             Spacer(Modifier.height(16.dp))
-            WorkingStatusWithTimer()
+            WorkingStatusWithTimer(startTime = streamingStartedAt)
         }
     }
 }
