@@ -114,6 +114,8 @@ fun SettingsScreen(
     onOpenGotify: () -> Unit = {},
     onResourceMonitorEnabled: (Boolean) -> Unit = {},
     onPinMessagesEnabled: (Boolean) -> Unit = {},
+    onWolServiceUrl: (String) -> Unit = {},
+    onWolServiceToken: (String) -> Unit = {},
     onActivityDetailLevel: (Int) -> Unit = {}
 ) {
     val strings = LocalStrings.current
@@ -237,6 +239,33 @@ fun SettingsScreen(
                         Text(strings.disconnect, color = NimayError, style = MaterialTheme.typography.labelMedium)
                     }
                 }
+            }
+
+            // ----------------------------------------------------------- WoL-tjeneste
+            SectionLabel("Wake-on-LAN-tjeneste", Modifier.padding(top = 10.dp))
+            SettingsCard {
+                Text(
+                    "Global adresse til WOL-tjenesten (brukes som fallback hvis PC-profilen ikke har egen adresse).",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = scheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                OutlinedTextField(
+                    value = settings.wolServiceUrl,
+                    onValueChange = onWolServiceUrl,
+                    label = { Text("WOL-tjeneste URL") },
+                    placeholder = { Text("http://192.168.50.222:8790") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = settings.wolServiceToken,
+                    onValueChange = onWolServiceToken,
+                    label = { Text("WOL-tjeneste token (valgfritt)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
 
             // ----------------------------------------------------------- model

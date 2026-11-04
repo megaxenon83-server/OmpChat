@@ -23,7 +23,7 @@ import crypto from "node:crypto";
 import { spawn, exec, execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const VERSION = "2.9.13";
+const VERSION = "2.9.14";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 // Resource monitoring state
@@ -1556,13 +1556,52 @@ function rateLimited(req) {
 // HTTP routes
 // ---------------------------------------------------------------------------
 
-function lanAddresses() {
+function networkInterfaces() {
   const out = [];
-  for (const [, addresses] of Object.entries(os.networkInterfaces())) {
-    for (const address of addresses || []) {
-      if (address.family === "IPv4" && !address.internal) out.push(address.address);
+  const seen = new Set();
+  for (const [name, addresses] of Object.entries(os.networkInterfaces())) {
+    if (!addresses) continue;
+    const lowerName = name.toLowerCase();
+    // Ekskluder loopback, VPN, Tailscale og virtuelle adaptere
+    if (lowerName.includes("loopback") || lowerName.includes("pseudo") ||
+        lowerName.includes("tailscale") || lowerName.includes("virtual") ||
+        lowerName.includes("vpn") || lowerName.includes("tap") ||
+        lowerName.includes("tun") || lowerName.includes("hyper-v") ||
+        lowerName.includes("vmware") || lowerName.includes("virtualbox") ||
+        lowerName.includes("docker") || lowerName.includes("wsl")) {
+      continue;
+    }
+    for (const addr of addresses) {
+      if (!addr || addr.family !== "IPv4" || addr.internal) continue;
+      const mac = (addr.mac || "").trim().toUpperCase();
+      if (!mac || mac === "00:00:00:00:00:00") continue;
+      // Ekskluder multicast MAC (første byte's siste bit = 1)
+      const firstByte = parseInt(mac.split(":")[0], 16);
+      if (isNaN(firstByte) || (firstByte & 1) !== 0) continue;
+      // Normaliser MAC
+      const normalizedMac = mac.replace(/-/g, ":");
+      if (seen.has(normalizedMac)) continue;
+      seen.add(normalizedMac);
+      const isWifi = lowerName.includes("wi-fi") || lowerName.includes("wireless") ||
+                     lowerName.includes("wlan") || lowerName.includes("wifi");
+      const isEthernet = lowerName.includes("ethernet") || lowerName.includes("eth") ||
+                         lowerName.includes("lan") || lowerName.includes("gbe") ||
+                         lowerName.includes("realtek") || lowerName.includes("intel");
+      out.push({
+        name: name,
+        mac: normalizedMac,
+        ip: addr.address,
+        type: isWifi ? "wifi" : (isEthernet ? "ethernet" : "other"),
+        wolCapable: isEthernet && !isWifi,
+      });
     }
   }
+  // Prioriter Ethernet-adaptere først
+  out.sort((a, b) => {
+    if (a.wolCapable && !b.wolCapable) return -1;
+    if (!a.wolCapable && b.wolCapable) return 1;
+    return a.name.localeCompare(b.name);
+  });
   return out;
 }
 
@@ -2191,7 +2230,10 @@ async function handle(req, res) {
         return json(res, 200, { ok: true, ...ompActive });
       }
 
-      case "GET /api/active": {
+      case "GET /api/network/interfaces": {
+        const interfaces = networkInterfaces();
+        return json(res, 200, { interfaces });
+      }
         // En nylig rapportert OMP-terminalsesjon er mer autoritativ enn
         // Bridge-runtimen. Rapporter eldre enn 2 minutter regnes som foreldet.
         if (ompActive && Date.now() - ompActive.reportedAt < 120000 && ompActive.sessionFile) {

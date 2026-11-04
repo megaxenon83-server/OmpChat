@@ -174,7 +174,19 @@ class BridgeClient(
         )
     }
 
-    /** Validate a folder before it becomes the working folder. */
+    /** Hent nettverkskort-informasjon fra Bridge (inkl. MAC-adresser). */
+    fun networkInterfaces(): List<NetworkInterfaceInfo> =
+        call("GET", "/api/network/interfaces").arr("interfaces").mapNotNull { element ->
+            element.asObjectOrNull()?.let { obj ->
+                NetworkInterfaceInfo(
+                    name = obj.str("name"),
+                    mac = obj.str("mac"),
+                    ip = obj.str("ip"),
+                    type = obj.str("type"),
+                    wolCapable = obj.bool("wolCapable")
+                )
+            }
+        }
     fun validateFolder(path: String): FolderInfo? {
         val json = call("GET", "/api/folders/validate?path=${encode(path)}")
         if (!json.bool("valid")) return null
@@ -726,6 +738,15 @@ data class NewSessionResult(
     val session: SessionSummary?,
     val state: ChatState,
     val cwd: String
+)
+
+/** A bridge runtime's most recently used conversation. */
+data class NetworkInterfaceInfo(
+    val name: String,
+    val mac: String,
+    val ip: String,
+    val type: String, // "ethernet", "wifi", "other"
+    val wolCapable: Boolean
 )
 
 /** A bridge runtime's most recently used conversation. */

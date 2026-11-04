@@ -97,6 +97,23 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         repository.candidatesProvider = { activePc()?.candidateUrls().orEmpty() }
         repository.onEndpointResolved = { url -> promoteEndpoint(url) }
         repository.onHostsDiscovered = { hosts -> mergePcEndpoints(_activePcId.value, hosts) }
+        // Automatisk MAC-henting ved tilkobling for PC-er uten MAC
+        viewModelScope.launch {
+            state.collect { st ->
+                if (st.connected && st.loadedOnce) {
+                    val pc = activePc()
+                    if (pc != null && pc.mac.isBlank()) {
+                        try {
+                            val interfaces = repository.bridge.networkInterfaces()
+                            val preferred = interfaces.firstOrNull { it.wolCapable } ?: interfaces.firstOrNull()
+                            if (preferred != null && preferred.mac.isNotBlank()) {
+                                savePcProfile(pc.copy(mac = preferred.mac))
+                            }
+                        } catch (_: Exception) { }
+                    }
+                }
+            }
+        }
         // Periodisk oppdateringssjekk (Etappe 8)
         viewModelScope.launch {
             while (true) {
@@ -187,6 +204,19 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
         savePcProfile(profile)
         switchPc(profile.id)
+        // Hent MAC-adresse automatisk fra Bridge
+        viewModelScope.launch {
+            try {
+                val interfaces = repository.bridge.networkInterfaces()
+                val preferred = interfaces.firstOrNull { it.wolCapable } ?: interfaces.firstOrNull()
+                if (preferred != null && preferred.mac.isNotBlank()) {
+                    val updated = profile.copy(mac = preferred.mac)
+                    savePcProfile(updated)
+                }
+            } catch (_: Exception) {
+                // MAC-henting feilet; brukeren kan sette den manuelt
+            }
+        }
         return null
     }
 
@@ -493,7 +523,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun wakePc(profile: PcProfile, onResult: (Boolean) -> Unit) {
         viewModelScope.launch {
-            val ok = if (profile.useDockerWol && profile.dockerWolUrl.isNotBlank()) {
+            val ok = if (profile.useDockerWol && profile.dockerWolUrl.isNotBlank() || settings.state.value.wolServiceUrl.isNotBlank()) {
                 wakeViaDocker(profile)
             } else {
                 WolSender.send(profile.mac, profile.wolBroadcast, profile.wolPort)
@@ -540,15 +570,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun wakeViaDocker(profile: PcProfile): Boolean = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         try {
-            val base = profile.dockerWolUrl.trimEnd('/')
+            val serviceUrl = profile.dockerWolUrl.ifBlank { settings.state.value.wolServiceUrl }
+            val serviceToken = profile.dockerWolToken.ifBlank { settings.state.value.wolServiceToken }
+            if (serviceUrl.isBlank()) return@withContext false
+            val base = serviceUrl.trimEnd('/')
             val id = profile.id
             // Prøv wake først.
             var conn = java.net.URL("$base/pcs/$id/wake").openConnection() as java.net.HttpURLConnection
             conn.requestMethod = "POST"
             conn.connectTimeout = 8000
             conn.readTimeout = 8000
-            if (profile.dockerWolToken.isNotBlank()) {
-                conn.setRequestProperty("Authorization", "Bearer " + profile.dockerWolToken)
+            if (serviceToken.isNotBlank()) {
+                conn.setRequestProperty("Authorization", "Bearer " + serviceToken)
             }
             var code = conn.responseCode
             conn.disconnect()
@@ -571,8 +604,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 conn.connectTimeout = 8000
                 conn.readTimeout = 8000
                 conn.setRequestProperty("Content-Type", "application/json")
-                if (profile.dockerWolToken.isNotBlank()) {
-                    conn.setRequestProperty("Authorization", "Bearer " + profile.dockerWolToken)
+                if (serviceToken.isNotBlank()) {
+                    conn.setRequestProperty("Authorization", "Bearer " + serviceToken)
                 }
                 conn.doOutput = true
                 conn.outputStream.use { it.write(body.toString().toByteArray()) }
@@ -583,8 +616,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 conn.requestMethod = "POST"
                 conn.connectTimeout = 8000
                 conn.readTimeout = 8000
-                if (profile.dockerWolToken.isNotBlank()) {
-                    conn.setRequestProperty("Authorization", "Bearer " + profile.dockerWolToken)
+                if (serviceToken.isNotBlank()) {
+                    conn.setRequestProperty("Authorization", "Bearer " + serviceToken)
                 }
                 code = conn.responseCode
                 conn.disconnect()

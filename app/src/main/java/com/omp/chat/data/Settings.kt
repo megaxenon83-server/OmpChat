@@ -30,6 +30,8 @@ data class AppSettings(
     val voiceSpeed: Float = 1f,
     val voiceBargeIn: Boolean = true,
     val voiceAutoListen: Boolean = true,
+    val wolServiceUrl: String = "",
+    val wolServiceToken: String = "",
     val animatedActiveIndicator: Boolean = true,
     val gotifyEnabled: Boolean = false,
     val gotifyServer: String = "",
@@ -90,6 +92,8 @@ class SettingsStore(context: Context) {
         voiceSpeed = prefs.getFloat(KEY_VOICE_SPEED, 1f),
         voiceBargeIn = prefs.getBoolean(KEY_VOICE_BARGE_IN, true),
         voiceAutoListen = prefs.getBoolean(KEY_VOICE_AUTO_LISTEN, true),
+        wolServiceUrl = prefs.getString(KEY_WOL_SERVICE_URL, "") ?: "",
+        wolServiceToken = prefs.getString(KEY_WOL_SERVICE_TOKEN, "") ?: "",
         animatedActiveIndicator = prefs.getBoolean(KEY_ANIMATED_ACTIVE, true),
         gotifyEnabled = prefs.getBoolean(KEY_GOTIFY_ENABLED, false),
         gotifyServer = prefs.getString(KEY_GOTIFY_SERVER, "") ?: "",
@@ -197,6 +201,16 @@ class SettingsStore(context: Context) {
         refresh()
     }
 
+    fun setWolServiceUrl(url: String) {
+        prefs.edit().putString(KEY_WOL_SERVICE_URL, url.trim()).apply()
+        refresh()
+    }
+
+    fun setWolServiceToken(token: String) {
+        prefs.edit().putString(KEY_WOL_SERVICE_TOKEN, token.trim()).apply()
+        refresh()
+    }
+
     fun setAnimatedActiveIndicator(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_ANIMATED_ACTIVE, enabled).apply()
         refresh()
@@ -279,6 +293,8 @@ class SettingsStore(context: Context) {
         private const val KEY_VOICE_SPEED = "voice_speed"
         private const val KEY_VOICE_BARGE_IN = "voice_barge_in"
         private const val KEY_VOICE_AUTO_LISTEN = "voice_auto_listen"
+        private const val KEY_WOL_SERVICE_URL = "wol_service_url"
+        private const val KEY_WOL_SERVICE_TOKEN = "wol_service_token"
         private const val KEY_ANIMATED_ACTIVE = "animated_active_indicator"
         private const val KEY_GOTIFY_ENABLED = "gotify_enabled"
         private const val KEY_GOTIFY_SERVER = "gotify_server"
