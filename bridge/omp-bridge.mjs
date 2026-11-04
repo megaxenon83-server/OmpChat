@@ -23,7 +23,7 @@ import crypto from "node:crypto";
 import { spawn, exec, execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const VERSION = "2.9.14";
+const VERSION = "2.9.16";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 // Resource monitoring state
@@ -1605,6 +1605,10 @@ function networkInterfaces() {
   return out;
 }
 
+function lanAddresses() {
+  return networkInterfaces().map((i) => i.ip).filter(Boolean);
+}
+
 function projects() {
   // Only folders that actually contain OMP sessions belong in the overview.
   // Valid but empty folders are still selectable through /api/folders; they are
@@ -2234,6 +2238,7 @@ async function handle(req, res) {
         const interfaces = networkInterfaces();
         return json(res, 200, { interfaces });
       }
+      case "GET /api/active": {
         // En nylig rapportert OMP-terminalsesjon er mer autoritativ enn
         // Bridge-runtimen. Rapporter eldre enn 2 minutter regnes som foreldet.
         if (ompActive && Date.now() - ompActive.reportedAt < 120000 && ompActive.sessionFile) {
