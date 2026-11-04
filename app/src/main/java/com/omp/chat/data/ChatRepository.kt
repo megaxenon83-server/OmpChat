@@ -1203,7 +1203,7 @@ class ChatRepository(private val settings: SettingsStore) {
         }
     }
 
-    fun send(text: String, images: List<String> = emptyList(), attachments: List<Upload> = emptyList()) {
+    fun send(text: String, images: List<String> = emptyList(), attachments: List<Upload> = emptyList(), streamingBehavior: String? = null) {
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return
         val token = epoch
@@ -1248,7 +1248,7 @@ class ChatRepository(private val settings: SettingsStore) {
                     saved.joinToString("\n") { "- `$it`" }
                 } else ""
                 val body = if (note.isNotEmpty()) "$trimmed\n\nVedlagte filer (ligger i prosjektmappen):\n$note" else trimmed
-                client.prompt(cwd, file.ifBlank { null }, body, images)
+                client.prompt(cwd, file.ifBlank { null }, body, images, streamingBehavior)
                 if (!isCurrent(token)) return@launch
                 markLocalUser(localId, "done")
             } catch (error: Exception) {

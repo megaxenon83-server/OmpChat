@@ -294,7 +294,7 @@ private fun AssistantMessage(
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     var copied by remember(message.id) { mutableStateOf(false) }
-    var thinkingOpen by remember(message.id) { mutableStateOf(showThinking) }
+    var thinkingOpen by remember(message.id) { mutableStateOf(false) }
 
     Row(Modifier.fillMaxWidth()) {
         Column(Modifier.weight(1f)) {

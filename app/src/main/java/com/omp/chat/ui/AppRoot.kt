@@ -181,6 +181,9 @@ fun AppRoot(
                                 onSend = { text, images, files ->
                                     viewModel.repository.send(text, images, files)
                                 },
+                                onQueue = { text, images, files ->
+                                    viewModel.repository.send(text, images, files, "followUp")
+                                },
                                 onStop = { viewModel.repository.stop() },
                                 onRegenerate = { id -> viewModel.repository.regenerate(id) },
                                 onEditResend = { id, text -> viewModel.repository.editAndResend(id, text) },

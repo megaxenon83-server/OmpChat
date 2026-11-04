@@ -248,7 +248,7 @@ class BridgeClient(
         return json.obj("model")?.let(Parsers::model)
     }
 
-    fun prompt(cwd: String, file: String?, text: String, images: List<String> = emptyList()) {
+    fun prompt(cwd: String, file: String?, text: String, images: List<String> = emptyList(), streamingBehavior: String? = null) {
         val body = JsonObject().apply {
             addProperty("cwd", cwd)
             if (!file.isNullOrBlank()) addProperty("file", file)
@@ -265,6 +265,9 @@ class BridgeClient(
                     })
                 }
                 add("images", array)
+            }
+            if (streamingBehavior != null) {
+                addProperty("streamingBehavior", streamingBehavior)
             }
         }
         call("POST", "/api/prompt", body, 90)

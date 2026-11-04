@@ -35,6 +35,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -74,6 +75,7 @@ fun Composer(
     enabled: Boolean = true,
     onRemoveAttachment: (Int) -> Unit,
     onSend: () -> Unit,
+    onQueue: () -> Unit = {},
     onStop: () -> Unit,
     onAttachClick: () -> Unit,
     onVoiceClick: () -> Unit,
@@ -185,6 +187,13 @@ fun Composer(
                         onStop = onStop,
                         modifier = Modifier.size(36.dp)
                     )
+                    // Kø-knapp når OMP arbeider
+                    if (canSend) {
+                        Spacer(Modifier.width(4.dp))
+                        TextButton(onClick = onQueue, modifier = Modifier.size(36.dp)) {
+                            Text("Kø", color = NimayAccent, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
                 } else {
                     SendStopButton(
                         streaming = false,

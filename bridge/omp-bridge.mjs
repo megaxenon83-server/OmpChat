@@ -2601,7 +2601,7 @@ async function handle(req, res) {
           await saveAttachments(runtime.cwd, body.attachments);
         }
         const images = Array.isArray(body.images) ? body.images : [];
-        const ack = await runtime.rpc("prompt", { message: body.text, ...(images.length ? { images } : {}) }, 60000);
+        const ack = await runtime.rpc("prompt", { message: body.text, ...(images.length ? { images } : {}), ...(body.streamingBehavior ? { streamingBehavior: body.streamingBehavior } : {}) }, 60000);
         runtime.lastUsed = Date.now();
         return json(res, 200, { ok: true, ack, sessionFile: runtime.sessionFile });
       }

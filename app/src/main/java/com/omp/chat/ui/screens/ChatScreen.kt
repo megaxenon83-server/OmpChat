@@ -128,6 +128,7 @@ fun ChatScreen(
     onSpeechConsumed: () -> Unit,
     onBack: () -> Unit,
     onSend: (String, List<String>, List<ChatRepository.Upload>) -> Unit,
+    onQueue: (String, List<String>, List<ChatRepository.Upload>) -> Unit = { _, _, _ -> },
     onStop: () -> Unit,
     onRegenerate: (String) -> Unit,
     onEditResend: (String, String) -> Unit,
@@ -608,6 +609,19 @@ fun ChatScreen(
                 onAttachmentsChange(attachments.filterIndexed { i, _ -> i != index })
             },
             onSend = send,
+            onQueue = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                val text = draft.trim()
+                if (text.isNotEmpty() || attachments.isNotEmpty()) {
+                    val images = attachments.filter { it.isImage }
+                        .map { "data:${it.mime};base64,${it.base64}" }
+                    val files = attachments.filter { !it.isImage }
+                        .map { ChatRepository.Upload(it.name, it.mime, it.base64) }
+                    onQueue(text, images, files)
+                    draft = ""
+                    onAttachmentsChange(emptyList())
+                }
+            },
             onStop = {
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 onStop()
@@ -696,6 +710,33 @@ fun ChatScreen(
 // ---------------------------------------------------------------------------
 
 @Composable
+private fun WorkingStatusWithTimer() {
+    val strings = LocalStrings.current
+    var elapsedSeconds by remember { mutableStateOf(0) }
+    var startTime by remember { mutableStateOf(System.currentTimeMillis()) }
+
+    LaunchedEffect(Unit) {
+        startTime = System.currentTimeMillis()
+        while (true) {
+            delay(1000)
+            elapsedSeconds = ((System.currentTimeMillis() - startTime) / 1000).toInt()
+        }
+    }
+
+    val minutes = elapsedSeconds / 60
+    val seconds = elapsedSeconds % 60
+    val timeText = if (minutes > 0) "${minutes} min ${seconds} sek" else "${seconds} sek"
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            "Arbeider · $timeText",
+            style = MaterialTheme.typography.labelSmall,
+            color = NimayTextSecondary
+        )
+    }
+}
+
+@Composable
 private fun EmptyChat(cwd: String, streaming: Boolean, onSuggestion: (String) -> Unit) {
     val strings = LocalStrings.current
     Column(
@@ -750,15 +791,7 @@ private fun EmptyChat(cwd: String, streaming: Boolean, onSuggestion: (String) ->
         }
         if (streaming) {
             Spacer(Modifier.height(16.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TypingDots(NimayAccent)
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    strings.working,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = NimayTextSecondary
-                )
-            }
+            WorkingStatusWithTimer()
         }
     }
 }
