@@ -10,7 +10,22 @@ import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 
-export const DEFAULT_PROJECT_ROOT = "C:\\Users\\Megaxenon\\Documents\\Opencode\\OmpChat";
+// Try to find the OmpChat installation in common locations.
+// The installer writes the actual path to ~/.omp/agent/ompchat-commands.json,
+// so this is only a fallback for edge cases (e.g. manual setup).
+function findDefaultProjectRoot(): string {
+  const candidates = [
+    "C:\\Program Files\\Nimay OMP",
+    "C:\\Program Files (x86)\\Nimay OMP",
+    path.join(process.env.LOCALAPPDATA || "", "Nimay OMP"),
+    path.join(process.env.PROGRAMFILES || "C:\\Program Files", "Nimay OMP"),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(path.join(c, BRIDGE_DIR_NAME, BRIDGE_SCRIPT))) return c;
+  }
+  return "C:\\Program Files\\Nimay OMP";
+}
+export const DEFAULT_PROJECT_ROOT = findDefaultProjectRoot();
 export const BRIDGE_DIR_NAME = "bridge";
 export const BRIDGE_SCRIPT = "omp-bridge.mjs";
 
@@ -251,7 +266,29 @@ export function nodeVersion(): string | null {
 export function ompBinary(): string {
   const configured = process.env.OMP_BIN?.trim();
   if (configured) return configured;
-  return path.join(os.homedir(), ".bun", "bin", "omp.exe");
+  // Check the Bun shim first (may be a shim that can't find node_modules)
+  const bunShim = path.join(os.homedir(), ".bun", "bin", "omp.exe");
+  // Check if the actual OMP cli.js exists (Bun package)
+  const cliJs = path.join(os.homedir(), ".bun", "install", "global", "node_modules", "@oh-my-pi", "pi-coding-agent", "dist", "cli.js");
+  const bunExe = process.platform === "win32"
+    ? "C:\\Users\\" + os.userInfo().username + "\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Oven-sh.Bun_Microsoft.Winget.Source_8wekyb3d8bbwe\\bun-windows-x64\\bun.exe"
+    : "/usr/local/bin/bun";
+  // If the shim exists and the cli.js doesn't, use the shim
+  if (fs.existsSync(bunShim) && !fs.existsSync(cliJs)) return bunShim;
+  // If cli.js exists and bun is available, use bun|cli.js format
+  if (fs.existsSync(cliJs) && fs.existsSync(bunExe)) return bunExe + "|" + cliJs;
+  // Fall back to common locations
+  const candidates = [
+    path.join(os.homedir(), ".bun", "bin", "omp.exe"),
+    path.join(os.homedir(), "AppData", "Roaming", "npm", "omp.cmd"),
+    path.join(os.homedir(), "AppData", "Roaming", "npm", "omp"),
+    "/usr/local/bin/omp",
+    "/usr/bin/omp",
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return bunShim;
 }
 
 export function checkStartPrerequisites(root = projectRoot()): string[] {
@@ -267,8 +304,14 @@ export function checkStartPrerequisites(root = projectRoot()): string[] {
     problems.push("Finner ikke Node.js i PATH. Installer Node.js 20+ og åpne terminalen på nytt.");
   }
   const omp = ompBinary();
-  if (!fs.existsSync(omp)) {
-    problems.push(`Finner ikke OMP på ${omp}. Sett OMP_BIN hvis den ligger et annet sted.`);
+  const ompPath = omp.includes("|") ? omp.split("|")[0] : omp;
+  const ompEntry = omp.includes("|") ? omp.split("|")[1] : null;
+  if (ompEntry) {
+    if (!fs.existsSync(ompEntry)) {
+      problems.push(`Finner ikke OMP på ${ompEntry}. Sett OMP_BIN hvis den ligger et annet sted.`);
+    }
+  } else if (!fs.existsSync(ompPath)) {
+    problems.push(`Finner ikke OMP på ${ompPath}. Sett OMP_BIN hvis den ligger et annet sted.`);
   }
   return problems;
 }
@@ -292,12 +335,13 @@ export function spawnBridge(root = projectRoot()): { pid: number | null; error: 
   try {
     outFd = fs.openSync(logs.out, "a");
     errFd = fs.openSync(logs.err, "a");
+    const omp = ompBinary();
     const child = spawn("node", [BRIDGE_SCRIPT], {
       cwd: dir,
       detached: true,
       windowsHide: true,
       stdio: ["ignore", outFd, errFd],
-      env: { ...process.env },
+      env: { ...process.env, OMP_BIN: omp },
     });
     child.unref();
     return { pid: child.pid ?? null, error: null };

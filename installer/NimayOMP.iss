@@ -7,7 +7,7 @@
 ; ---------------------------------------------------------------------------
 
 #define AppName "Nimay OMP"
-#define AppVersion "3.2.6"
+#define AppVersion "3.2.7"
 #define AppPublisher "Nimay"
 #define AppURL "https://nimay.net"
 #define Payload "build\payload"
@@ -70,9 +70,9 @@ Name: "tts\vibevoice"; Description: "VibeVoice - eksperimentell (3,5 GB+, krever
 
 [Tasks]
 Name: "desktopicon"; Description: "Lag snarvei pa skrivebordet"; GroupDescription: "Snarveier:"
-Name: "autostart"; Description: "Start OMP Bridge automatisk nar du logger inn"; GroupDescription: "Oppstart:"
-Name: "startbridge"; Description: "Start OMP Bridge etter installasjonen"; GroupDescription: "Oppstart:"
-Name: "registercommands"; Description: "Registrer /ompserver og /ompqr i OMP"; GroupDescription: "OMP:"
+Name: "autostart"; Description: "Start OMP Bridge automatisk nar du logger inn"; GroupDescription: "Oppstart:"; Flags: checkedonce
+Name: "startbridge"; Description: "Start OMP Bridge etter installasjonen"; GroupDescription: "Oppstart:"; Flags: checkedonce
+Name: "registercommands"; Description: "Registrer /ompserver og /ompqr i OMP"; GroupDescription: "OMP:"; Flags: checkedonce
 
 [Files]
 ; Android client
@@ -102,14 +102,14 @@ Name: "{userstartup}\Nimay OMP Bridge"; Filename: "{sys}\wscript.exe"; Parameter
 ; 1. Install selected voice engines (real downloads, real verification)
 Filename: "{app}\tools\powershell-run.cmd"; Parameters: "-File ""{app}\voice\setup-voice.ps1"" -InstallDir ""{app}"" -PythonExe ""{code:GetPythonExe}"" -Stt ""{code:GetSttList}"" -Tts ""{code:GetTtsList}"" -LogFile ""{app}\voice\setup.log"""; StatusMsg: "Installerer valgte talemotorer (kan ta flere minutter)..."; Flags: runhidden waituntilterminated; Check: VoiceSelected
 ; 2. Register OMP slash commands
-Filename: "{app}\tools\powershell-run.cmd"; Parameters: "-File ""{app}\tools\install-commands.ps1"" -AppDir ""{app}"""; StatusMsg: "Registrerer OMP-kommandoer..."; Flags: runhidden waituntilterminated; Tasks: registercommands
+Filename: "{app}\tools\powershell-run.cmd"; Parameters: "-File ""{app}\tools\install-commands.ps1"" -AppDir ""{app}"""; StatusMsg: "Registrerer OMP-kommandoer..."; Flags: runhidden waituntilterminated
 ; 3. Firewall: allow the phone to reach the bridge and the APK server
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""Nimay OMP Bridge"""; Flags: runhidden; StatusMsg: "Konfigurerer brannmur..."
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""Nimay OMP Bridge"" dir=in action=allow protocol=TCP localport=7777,7787 profile=private,domain"; Flags: runhidden
 ; 4. Start the bridge so the phone page works right away. explorer.exe is used
 ;    on purpose: the installer is elevated, and the bridge must NOT run as
 ;    administrator because the phone can drive OMP through it.
-Filename: "{win}\explorer.exe"; Parameters: """{app}\tools\start-bridge-hidden.vbs"""; StatusMsg: "Starter OMP Bridge..."; Flags: runhidden nowait; Tasks: startbridge or autostart
+Filename: "{win}\explorer.exe"; Parameters: """{app}\tools\start-bridge-hidden.vbs"""; StatusMsg: "Starter OMP Bridge..."; Flags: runhidden nowait
 
 [UninstallRun]
 Filename: "{app}\tools\powershell-run.cmd"; Parameters: "-File ""{app}\tools\stop-bridge.ps1"" -InstallDir ""{app}"""; Flags: runhidden; RunOnceId: "StopNimayServices"
