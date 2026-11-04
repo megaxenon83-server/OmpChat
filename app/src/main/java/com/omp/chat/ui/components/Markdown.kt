@@ -1,4 +1,4 @@
-package com.omp.chat.ui.components
+﻿package com.omp.chat.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -395,7 +396,7 @@ fun MarkdownText(
                     block.items.forEachIndexed { index, item ->
                         Row(modifier = Modifier.fillMaxWidth()) {
                             Text(
-                                text = if (block.ordered) "${index + 1}." else "•",
+                                text = if (block.ordered) "${index + 1}." else "â€¢",
                                 style = bodyStyle,
                                 color = NimayTextSecondary,
                                 modifier = Modifier.width(if (block.ordered) 28.dp else 20.dp)
@@ -512,6 +513,8 @@ private fun CodeBlock(lang: String, code: String) {
 
 @Composable
 private fun MarkdownTable(table: MdBlock.Table) {
+    val scrollState = rememberScrollState()
+
     Surface(
         color = NimaySidebar,
         shape = RoundedCornerShape(10.dp),
@@ -519,15 +522,15 @@ private fun MarkdownTable(table: MdBlock.Table) {
             .fillMaxWidth()
             .border(1.dp, NimayDivider, RoundedCornerShape(10.dp))
     ) {
-        Column(Modifier.padding(vertical = 4.dp)) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
+        Column(Modifier.horizontalScroll(scrollState).padding(vertical = 4.dp)) {
+            Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                 table.header.forEachIndexed { index, cell ->
                     Text(
                         text = MarkdownParser.inline(cell, NimaySidebar, NimayAccent),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = NimayTextPrimary,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.widthIn(min = 80.dp, max = 200.dp).padding(end = 12.dp)
                     )
                 }
             }
@@ -535,7 +538,6 @@ private fun MarkdownTable(table: MdBlock.Table) {
             table.rows.forEachIndexed { rowIndex, row ->
                 Row(
                     Modifier
-                        .fillMaxWidth()
                         .background(if (rowIndex % 2 == 0) NimaySidebar else NimayInput)
                         .padding(horizontal = 12.dp, vertical = 7.dp)
                 ) {
@@ -544,7 +546,7 @@ private fun MarkdownTable(table: MdBlock.Table) {
                             text = MarkdownParser.inline(cell, NimaySidebar, NimayAccent),
                             style = MaterialTheme.typography.bodySmall,
                             color = NimayTextPrimary,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.widthIn(min = 80.dp, max = 200.dp).padding(end = 12.dp)
                         )
                     }
                 }
