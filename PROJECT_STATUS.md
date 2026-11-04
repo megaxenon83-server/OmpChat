@@ -43,3 +43,42 @@ Snarveien i Startup-mappen pekte til `Start-OMP-Bridge.cmd` (åpner konsollvindu
 ### Gjenstående manuell testing
 - GUI med norsk/engelsk språkvalg, sideflyt, Tilbake/Neste, komponentvalg, avbryt
 - Oppgradering over eksisterende installasjon uten tap av innstillinger
+
+## SSH auto-recovery (Debian-server) - 2026-11-04
+
+### Rotarsak
+Etter strombrudd feilet ssh.service ved oppstart fordi sshd_config hadde
+hardkodet ListenAddress 192.168.50.222 og 100.108.19.128; disse IP-ene
+var ikke tildelt enna, sa sshd avsluttet med status 255. Basenheten har
+RestartPreventExitStatus=255, sa systemd restartet den ikke. Manuell
+reparasjon via privilegert Alpine-container (nsenter) var nodvendig.
+
+### Implementerte endringer (pa serveren)
+- /etc/ssh/sshd_config: ListenAddress endret til 0.0.0.0 (backup tatt).
+- /etc/systemd/system/ssh.service.d/override.conf: fjernet
+  RestartPreventExitStatus, Restart=on-failure, RestartSec=5, StartLimit 5/5min,
+  ExecStartPre=ssh-readiness.sh, avhengigheter network-online.target +
+  tailscaled.service.
+- /usr/local/sbin/ssh-readiness.sh: venter (maks 60s) pa nettverk.
+- /usr/local/sbin/ssh-recovery.sh: watchdog som sjekker port 22, begrensede
+  forsok med 300s cooldown, logger til /var/log/ssh-recovery.log.
+- /etc/systemd/system/ssh-recovery.service + ssh-recovery.timer: timer
+  60s etter boot og hver 120s, persistent.
+- ssh.service enabled; ssh-recovery.timer enabled.
+- Docker sidecar /home/megaxenon/Docker/ssh-recovery: Alpine-container
+  (privileged, pid:host, network:host, restart:unless-stopped, ingen nye porter)
+  som ekstra sikkerhetsnett via nsenter. Bygget og startet; status healthy.
+
+### Verifisering
+1. SSH fungerer na (lytter pa 0.0.0.0:22, tilkobling OK).
+2. Simulert tjenestefeil (systemctl stop ssh.service) ble automatisk
+   reparert innen ca 30s av ssh-recovery-timeren; bekreftet i logg.
+3. Reparasjon uavhengig av OMP/OMP Bridge.
+4. Oppstartskonfigurasjon enabled og vedvarende.
+5. Ingen konflikt mellom systemd og Docker (begge lag observert OK).
+6. Eksisterende 55 Docker-tjenester urort; ny ssh-recovery-container lagt til.
+Ingen full serveromstart utfort (ikke godkjent).
+
+### Sikkerhetskopier
+- /root/ssh-recovery-backup-<timestamp>/
+- /etc/ssh/sshd_config.bak.sshrecovery

@@ -504,16 +504,9 @@ class ChatRepository(private val settings: SettingsStore) {
         lastResync = now
         scope.launch {
             if (!isCurrent(token)) return@launch
-            // 1) Authoritative transcript of the open session fills everything
-            //    missed while the stream was down. Never touch the session
-            //    itself: a running OMP task must not be restarted or replaced.
-            val streaming = _state.value.streaming
-            if (!_state.value.readOnly && _state.value.sessionFile.isNotBlank() && !streaming) {
-                runCatching { reloadTranscript() }
-            }
-            if (!isCurrent(token)) return@launch
-            // 2) Fresh runtime state (model, streaming flag, todos, pending UI
-            //    request) via the normal GET /api/state endpoint.
+            // 1) Fresh runtime state first: this is authoritative for whether
+            //    the agent is still working. Without this, a stale local
+            //    streaming=true would skip the transcript reload below.
             val cwd = resolvedCwd()
             if (cwd.isNotBlank() && !_state.value.readOnly) {
                 try {
@@ -523,6 +516,14 @@ class ChatRepository(private val settings: SettingsStore) {
                 if (!isCurrent(token)) return@launch
                 runCatching { loadModels(cwd, token) }
             }
+            if (!isCurrent(token)) return@launch
+            // 2) Authoritative transcript fills everything missed while the
+            //    stream was down. Only reload when the agent is not streaming.
+            val streaming = _state.value.streaming
+            if (!_state.value.readOnly && _state.value.sessionFile.isNotBlank() && !streaming) {
+                runCatching { reloadTranscript() }
+            }
+            if (!isCurrent(token)) return@launch
             runCatching { loadSessions(token) }
             if (!isCurrent(token)) return@launch
             // 3) A finished turn while offline means the empty tail bubble must
@@ -1582,7 +1583,7 @@ class ChatRepository(private val settings: SettingsStore) {
             } else parsed
             st.copy(
                 chat = chat,
-                streaming = chat.isStreaming || st.streaming,
+                streaming = chat.isStreaming,
                 todos = chat.todoPhases,
                 title = title,
                 sessionFile = chat.sessionFile.ifBlank { st.sessionFile },
