@@ -638,6 +638,7 @@ fun ChatScreen(
         ModelSheet(
             models = state.models,
             current = state.chat.model,
+            usageCounts = state.modelUsageCounts,
             onSelect = onModel,
             onDismiss = { modelOpen = false }
         )

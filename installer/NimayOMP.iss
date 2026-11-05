@@ -7,7 +7,7 @@
 ; ---------------------------------------------------------------------------
 
 #define AppName "Nimay OMP"
-#define AppVersion "3.2.7"
+#define AppVersion "3.2.8"
 #define AppPublisher "Nimay"
 #define AppURL "https://nimay.net"
 #define Payload "build\payload"
@@ -20,7 +20,7 @@ AppVerName={#AppName} {#AppVersion}
 AppPublisher={#AppPublisher}
 AppPublisherURL={#AppURL}
 AppSupportURL={#AppURL}
-DefaultDirName={autopf}\Nimay OMP
+DefaultDirName={localappdata}\Nimay\OMPBridge
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 AllowNoIcons=yes

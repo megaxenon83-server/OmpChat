@@ -306,7 +306,6 @@ fun AppRoot(
                                 onResourceMonitorEnabled = { viewModel.settings.setResourceMonitorEnabled(it) },
                                 onPinMessagesEnabled = { viewModel.settings.setPinMessagesEnabled(it) },
                                 onWolServiceUrl = { viewModel.settings.setWolServiceUrl(it) },
-                                onWolServiceToken = { viewModel.settings.setWolServiceToken(it) },
                                 onActivityDetailLevel = { viewModel.settings.setActivityDetailLevel(it) }
                             )
 

@@ -60,7 +60,7 @@ if (-not $bridgeUp) {
     } else {
         Start-Process -FilePath $node -ArgumentList "`"$(Join-Path $bridgeDir 'omp-bridge.mjs')`"" -WorkingDirectory $bridgeDir -WindowStyle Hidden -ErrorAction SilentlyContinue
     }
-    for ($i = 0; $i -lt 40; $i++) {
+    for ($i = 0; $i -lt 10; $i++) {
         Start-Sleep -Milliseconds 500
         if (Test-Bridge) { $bridgeUp = $true; break }
     }
@@ -68,7 +68,7 @@ if (-not $bridgeUp) {
         # Explorer launch did not work (no shell?) - start it directly so the
         # QR page still shows a live pairing code.
         Start-Process -FilePath $node -ArgumentList "`"$(Join-Path $bridgeDir 'omp-bridge.mjs')`"" -WorkingDirectory $bridgeDir -WindowStyle Hidden -ErrorAction SilentlyContinue
-        for ($i = 0; $i -lt 20; $i++) {
+        for ($i = 0; $i -lt 10; $i++) {
             Start-Sleep -Milliseconds 500
             if (Test-Bridge) { $bridgeUp = $true; break }
         }

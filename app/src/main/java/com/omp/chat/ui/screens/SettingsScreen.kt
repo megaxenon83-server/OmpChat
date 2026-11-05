@@ -115,7 +115,6 @@ fun SettingsScreen(
     onResourceMonitorEnabled: (Boolean) -> Unit = {},
     onPinMessagesEnabled: (Boolean) -> Unit = {},
     onWolServiceUrl: (String) -> Unit = {},
-    onWolServiceToken: (String) -> Unit = {},
     onActivityDetailLevel: (Int) -> Unit = {}
 ) {
     val strings = LocalStrings.current
@@ -203,7 +202,7 @@ fun SettingsScreen(
                     Spacer(Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         MetaPill(strings.version, state.bridgeVersion.ifBlank { "—" })
-                        MetaPill(strings.approvalMode, approvalModeLabel(state.approvalMode))
+                        MetaPill(strings.approvalMode, approvalModeLabel(settings.approvalMode))
                         MetaPill(strings.terminalAccess, if (state.terminalEnabled) strings.enabled else strings.disabled)
                     }
                     Spacer(Modifier.height(10.dp))
@@ -255,14 +254,6 @@ fun SettingsScreen(
                     onValueChange = onWolServiceUrl,
                     label = { Text("WOL-tjeneste URL") },
                     placeholder = { Text("http://192.168.50.222:8790") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = settings.wolServiceToken,
-                    onValueChange = onWolServiceToken,
-                    label = { Text("WOL-tjeneste token (valgfritt)") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )

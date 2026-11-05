@@ -1,4 +1,4 @@
-﻿# Starts the OMP bridge without a console window and waits until it answers.
+# Starts the OMP bridge without a console window and waits until it answers.
 # The port comes from bridge\config.json unless -Port is given, so the hidden
 # launcher (start-bridge-hidden.vbs) always starts the bridge on the configured
 # port.
@@ -10,6 +10,21 @@ param(
 $appDir = Split-Path -Parent $PSScriptRoot
 $bridgeDir = Join-Path $appDir "bridge"
 $script = Join-Path $bridgeDir "omp-bridge.mjs"
+
+# Resolve OMP_BIN: env var first, then saved file, then registry.
+if (-not $env:OMP_BIN) {
+    $binFile = Join-Path $bridgeDir "omp-bin.txt"
+    if (Test-Path $binFile) {
+        $saved = (Get-Content -Raw -Encoding UTF8 $binFile).Trim()
+        if ($saved) { $env:OMP_BIN = $saved }
+    }
+}
+if (-not $env:OMP_BIN) {
+    try {
+        $reg = (Get-ItemProperty -Path 'HKCU:\Environment' -Name 'OMP_BIN' -ErrorAction SilentlyContinue).OMP_BIN
+        if ($reg) { $env:OMP_BIN = $reg }
+    } catch { }
+}
 if (-not (Test-Path $script)) { Write-Host "Fant ikke $script"; exit 1 }
 
 if ($Port -le 0) {

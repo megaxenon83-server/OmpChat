@@ -88,6 +88,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         // Per-PC position: the repository persists every confirmed cwd/session
         // to the profile that is active right now, never to another PC.
         repository.onRememberLast = { cwd, session -> savePositionToActive(cwd, session) }
+        repository.modelUsageProvider = { activePc()?.modelUsageCounts ?: emptyMap() }
+        repository.onModelSelected = { key -> recordModelUsage(key) }
         // Live oppgaveovervåking (Etappe 3): koble ChatRepository-hendelser til TaskStore.
         repository.taskListener = { event ->
             val pcId = pcProfiles.activeId().ifBlank { "default" }
@@ -396,6 +398,23 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun activePc(): PcProfile? = _pcProfiles.value.firstOrNull { it.id == _activePcId.value }
+
+    private fun recordModelUsage(key: String) {
+        if (key.isBlank()) return
+        val id = pcProfiles.activeId()
+        if (id.isBlank()) return
+        val list = pcProfiles.load().toMutableList()
+        val idx = list.indexOfFirst { it.id == id }
+        if (idx < 0) return
+        val profile = list[idx]
+        val counts = profile.modelUsageCounts.toMutableMap()
+        counts[key] = (counts[key] ?: 0) + 1
+        val updated = profile.copy(modelUsageCounts = counts)
+        list[idx] = updated
+        pcProfiles.save(list)
+        _pcProfiles.value = list
+        repository.resortModels()
+    }
 
     fun isFavorite(sessionFile: String): Boolean = _favoriteSessions.value.contains(sessionFile)
 

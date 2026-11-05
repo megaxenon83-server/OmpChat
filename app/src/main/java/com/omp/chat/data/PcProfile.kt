@@ -24,6 +24,7 @@ data class PcProfile(
     val favoriteSessions: List<String> = emptyList(),
     val autoConnect: Boolean = true,
     val favoriteModels: List<String> = emptyList(),
+    val modelUsageCounts: Map<String, Int> = emptyMap(),
     val fallbackModel: String = "",
     val useDockerWol: Boolean = false,
     val dockerWolUrl: String = "",
@@ -91,6 +92,12 @@ class PcProfileStore(context: Context) {
                         favoriteSessions = (0 until o.optJSONArray("favoriteSessions").let { it?.length() ?: 0 }).map { o.optJSONArray("favoriteSessions").optString(it) }.filter { it.isNotBlank() },
                         autoConnect = o.optBoolean("autoConnect", true),
                         favoriteModels = (0 until o.optJSONArray("favoriteModels").let { it?.length() ?: 0 }).map { o.optJSONArray("favoriteModels").optString(it) },
+                        modelUsageCounts = run {
+                            val obj = o.optJSONObject("modelUsageCounts")
+                            val map = mutableMapOf<String, Int>()
+                            obj?.keys()?.forEach { k -> map[k] = obj.optInt(k, 0) }
+                            map
+                        },
                         fallbackModel = o.optString("fallbackModel"),
                         useDockerWol = o.optBoolean("useDockerWol", false),
                         dockerWolUrl = o.optString("dockerWolUrl"),
@@ -136,6 +143,9 @@ class PcProfileStore(context: Context) {
                 val favArr = org.json.JSONArray()
                 p.favoriteModels.forEach { favArr.put(it) }
                 put("favoriteModels", favArr)
+                val usageObj = org.json.JSONObject()
+                p.modelUsageCounts.forEach { (k, v) -> usageObj.put(k, v) }
+                put("modelUsageCounts", usageObj)
                 put("fallbackModel", p.fallbackModel)
                 put("useDockerWol", p.useDockerWol)
                 put("dockerWolUrl", p.dockerWolUrl)

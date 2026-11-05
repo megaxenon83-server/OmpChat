@@ -25,9 +25,9 @@ function findDefaultProjectRoot(): string {
   }
   return "C:\\Program Files\\Nimay OMP";
 }
-export const DEFAULT_PROJECT_ROOT = findDefaultProjectRoot();
 export const BRIDGE_DIR_NAME = "bridge";
 export const BRIDGE_SCRIPT = "omp-bridge.mjs";
+export const DEFAULT_PROJECT_ROOT = findDefaultProjectRoot();
 
 export interface BridgeConfig {
   port: number;
@@ -266,6 +266,14 @@ export function nodeVersion(): string | null {
 export function ompBinary(): string {
   const configured = process.env.OMP_BIN?.trim();
   if (configured) return configured;
+  // Fall back to saved omp-bin.txt next to the bridge (written by installer).
+  try {
+    const binFile = path.join(bridgeDir(), "omp-bin.txt");
+    if (fs.existsSync(binFile)) {
+      const saved = fs.readFileSync(binFile, "utf8").trim();
+      if (saved) return saved;
+    }
+  } catch { /* ignore */ }
   // Check the Bun shim first (may be a shim that can't find node_modules)
   const bunShim = path.join(os.homedir(), ".bun", "bin", "omp.exe");
   // Check if the actual OMP cli.js exists (Bun package)

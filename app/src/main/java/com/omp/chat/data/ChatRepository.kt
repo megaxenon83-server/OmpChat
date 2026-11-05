@@ -27,6 +27,7 @@ data class RepoState(
     val sessions: List<SessionSummary> = emptyList(),
     val archivedSessions: List<SessionSummary> = emptyList(),
     val models: List<ModelInfo> = emptyList(),
+    val modelUsageCounts: Map<String, Int> = emptyMap(),
     val messages: List<ChatMessage> = emptyList(),
     val chat: ChatState = ChatState(),
     val streaming: Boolean = false,
@@ -74,6 +75,10 @@ class ChatRepository(private val settings: SettingsStore) {
 
     /** Alle kjente adresser til aktiv PC (primær + LAN/Tailscale/VPN). */
     var candidatesProvider: () -> List<String> = { emptyList() }
+
+    var modelUsageProvider: () -> Map<String, Int> = { emptyMap() }
+
+    var onModelSelected: (String) -> Unit = {}
 
     /** Kalles når en alternativ adresse svarte; brukes til å gjøre den primær. */
     var onEndpointResolved: (String) -> Unit = { }
@@ -654,6 +659,17 @@ class ChatRepository(private val settings: SettingsStore) {
         }
     }
 
+    private fun sortModelsByUsage(models: List<ModelInfo>, counts: Map<String, Int>): List<ModelInfo> {
+        return models.sortedWith(compareByDescending<ModelInfo> { counts[it.key] ?: 0 }
+            .thenBy { it.name.ifBlank { it.id } })
+    }
+
+    fun resortModels() {
+        val counts = modelUsageProvider()
+        val sorted = sortModelsByUsage(_state.value.models, counts)
+        _state.update { it.copy(models = sorted, modelUsageCounts = counts) }
+    }
+
     fun loadModels(cwd: String = resolvedCwd(), token: Int = epoch) {
         if (!CwdPath.isUsable(cwd)) return
         scope.launch {
@@ -661,7 +677,9 @@ class ChatRepository(private val settings: SettingsStore) {
             runCatching {
                 val models = client.models(cwd)
                 if (!isCurrent(token)) return@launch
-                _state.update { it.copy(models = models) }
+                val counts = modelUsageProvider()
+                val sorted = sortModelsByUsage(models, counts)
+                _state.update { it.copy(models = sorted, modelUsageCounts = counts) }
             }
         }
     }
@@ -1055,12 +1073,18 @@ class ChatRepository(private val settings: SettingsStore) {
                 chat = it.chat.copy(model = model)
             )
         }
+        onModelSelected(model.key)
+        resortModels()
         scope.launch {
             try {
                 val applied = client.setModel(cwd, model) ?: model
                 if (!isCurrent(token)) return@launch
                 settings.rememberModel(applied.provider, applied.id, applied.name)
                 _state.update { it.copy(chat = it.chat.copy(model = applied)) }
+                if (applied.key != model.key) {
+                    onModelSelected(applied.key)
+                    resortModels()
+                }
             } catch (error: Exception) {
                 if (!isCurrent(token)) return@launch
                 var fb = fallbackModel

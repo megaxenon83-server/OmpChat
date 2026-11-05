@@ -92,3 +92,66 @@ Ingen full serveromstart utfort (ikke godkjent).
 - Selvstendig EXE: Nimay-OMP-Bridge-Cleanup.exe
 - SHA-256: B219B7E76E5C5EA3C544CDF22E73BCACCD4BE6EB30427578791BDA14AD79F5B1
 - Publisert under GitHub Release v2.9.73
+
+## New Installer – Nimay-OMP-Bridge-Setup.exe (3.3.0)
+- Selvstendig Windows-installer bygget fra bunnen av
+- SHA-256: A4624E143CAF54783336D80247F2607DB9F85A23FFDC730080F13CD79DEBD701
+- Installasjonsmappe: %LOCALAPPDATA%\Nimay\OMPBridge
+- Autostart: Windows-tjeneste (SYSTEM, ingen passord)
+- GitHub Release: v3.3.0
+
+
+## Modellvelger + mest brukte modeller (OmpChat 2.9.72) - 2026-11-05
+
+### Filtrering (OMP, permanent)
+- ~/.omp/agent/config.yml: lagt til enabledModels (backup: config.yml.bak.modelselector).
+  Mønstre: ollama/*, nvidia/nvidia/nemotron-3.5-super-vl-120b-a12b,
+  google/*, google-antigravity/*.
+- Resultat: kun aktiverte API-modeller + lokale Ollama vises; NVIDIA kun Nemotron.
+
+### Mest brukte modeller (Android, per PC)
+- PcProfile: nytt felt modelUsageCounts (Map<String,Int>), serialisert i PcProfileStore.
+- ChatRepository: modelUsageProvider, onModelSelected, sortModelsByUsage,
+  resortModels(); RepoState.modelUsageCounts. loadModels/sorterer; setModel teller bruk.
+- AppViewModel: recordModelUsage() oppdaterer aktiv PC-profil og lagrer.
+- ModelSheet: to seksjoner "Mest brukte" (maks 5) og "Andre tilgjengelige modeller",
+  hake på aktiv modell, uendret design.
+
+### Bygg
+- assembleDebug og assembleRelease: BUILD SUCCESSFUL.
+- APK: OmpChat-2.9.72.apk / OmpChat-2.9.72-release.apk (v2.9.72, code 97).
+
+
+## Versjon 2.10.0 (2026-11-05)
+- app/build.gradle: versionCode 98, versionName 2.10.0.
+- APK bygget: OmpChat-2.10.0.apk / OmpChat-2.10.0-release.apk.
+- GitHub release v2.10.0 opprettet med samlede assets:
+  - OmpChat-2.10.0.apk
+  - NimayOMP-Setup-3.2.7.exe
+  - Nimay-OMP-Bridge-Cleanup.exe (uninstaller)
+
+
+## Versjon 2.10.1 (2026-11-05)
+- Fiks: Koble fra sletter ikke lenger PC-profilen (disconnectPc bevarer profil og paring).
+- Sletting kun via søppelbøtte med bekreftelsesdialog:
+  "Er du sikker på at du vil slette denne PC-en?" med Avbryt/Slett,
+  auto-lukkes etter 10s uten sletting.
+- app/build.gradle: versionCode 99, versionName 2.10.1.
+- APK: OmpChat-2.10.1.apk.
+- GitHub release v2.10.1 med OmpChat-2.10.1.apk + NimayOMP-Setup-3.2.7.exe +
+  Nimay-OMP-Bridge-Cleanup.exe.
+
+
+## Installer 3.2.8 (2026-11-05)
+- NimayOMP.iss: DefaultDirName endret til {localappdata}\Nimay\OMPBridge
+  (Bridge havner i %LOCALAPPDATA%\Nimay\OMPBridge\bridge\, ikke Program Files).
+- prepare-mobile-page.ps1: bridge-ventetid 40x500ms -> 10x500ms (5s) og
+  fallback 20x500ms -> 10x500ms. Raskere, begrenset ventetid.
+- Ingen SYSTEM-konto: autostart via {userstartup} (wscript.exe + VBS) i
+  brukerkontekst; start via explorer.exe beholder brukerrettigheter.
+- Testinstallasjon til temp-mappe verifisert: bridge/config.json opprettet,
+  omp-bridge.mjs til stede, installasjon exit 0.
+- Ny EXE: NimayOMP-Setup-3.2.8.exe (22.01 MB).
+- GitHub release v2.10.2: OmpChat-2.10.1.apk + NimayOMP-Setup-3.2.8.exe +
+  Nimay-OMP-Bridge-Cleanup.exe.
+- Reboot-autostart er IKKE testet (ingen omstart utført).

@@ -105,6 +105,11 @@ async function getResources() {
 const OMP_BIN = (() => {
   // 1. Respect OMP_BIN environment variable
   if (process.env.OMP_BIN) return process.env.OMP_BIN;
+  // 1b. Fall back to saved omp-bin.txt next to the bridge
+  try {
+    const saved = fs.readFileSync(path.join(HERE, "omp-bin.txt"), "utf8").trim();
+    if (saved) return saved;
+  } catch { /* ignore */ }
   // 2. Bun-based OMP (run with bun) - preferred over the broken bun shim
   const bunCliJs = path.join(os.homedir(), ".bun", "install", "global", "node_modules", "@oh-my-pi", "pi-coding-agent", "dist", "cli.js");
   try {

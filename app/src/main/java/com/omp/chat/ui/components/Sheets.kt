@@ -123,7 +123,7 @@ fun ApprovalSheet(
             when (request.method) {
                 "select" -> {
                     request.options.forEach { option ->
-                        val deny = option.contains("deny", true) || option.contains("avslå", true)
+                        val deny = option.contains("deny", true) || option.contains("avslÃ¥", true)
                         OptionRow(
                             label = option,
                             selected = false,
@@ -308,6 +308,7 @@ private fun OptionRow(
 fun ModelSheet(
     models: List<ModelInfo>,
     current: ModelInfo?,
+    usageCounts: Map<String, Int> = emptyMap(),
     onSelect: (ModelInfo) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -342,53 +343,97 @@ fun ModelSheet(
                 ),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                items(models, key = { it.key }) { model ->
-                    val isCurrent = current?.key == model.key
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (isCurrent) scheme.primary.copy(alpha = 0.1f) else scheme.surface)
-                            .clickable {
-                                onSelect(model)
-                                onDismiss()
-                            }
-                            .padding(horizontal = 14.dp, vertical = 11.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                model.name.ifBlank { model.id },
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = scheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            val meta = buildList {
-                                add(model.provider)
-                                model.contextWindow?.let { add("${shortNumber(it)} ctx") }
-                                if (model.supportsImages) add(strings.vision)
-                                if (model.reasoning) add(strings.reasoningTag)
-                            }.joinToString(" · ")
-                            Text(
-                                meta,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = scheme.onSurfaceVariant
-                            )
-                        }
-                        if (isCurrent) {
-                            Icon(
-                                Icons.Default.Check,
-                                contentDescription = strings.currentModel,
-                                tint = scheme.primary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
+                val frequentKeys = models
+                    .filter { (usageCounts[it.key] ?: 0) > 0 }
+                    .sortedByDescending { usageCounts[it.key] ?: 0 }
+                    .take(5)
+                    .map { it.key }
+                    .toSet()
+                val frequentModels = models.filter { it.key in frequentKeys }
+                val otherModels = models.filter { it.key !in frequentKeys }
+
+                if (frequentModels.isNotEmpty()) {
+                    item {
+                        Text(
+                            "Mest brukte",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = scheme.primary,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                    items(frequentModels, key = { it.key }) { model ->
+                        ModelRow(model, current, scheme, strings, onSelect, onDismiss)
+                    }
+                }
+                if (otherModels.isNotEmpty()) {
+                    item {
+                        Text(
+                            "Andre tilgjengelige modeller",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = scheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                    items(otherModels, key = { it.key }) { model ->
+                        ModelRow(model, current, scheme, strings, onSelect, onDismiss)
                     }
                 }
             }
             Spacer(Modifier.size(12.dp))
+        }
+    }
+}
+
+@Composable
+private fun ModelRow(
+    model: ModelInfo,
+    current: ModelInfo?,
+    scheme: androidx.compose.material3.ColorScheme,
+    strings: com.omp.chat.ui.Strings,
+    onSelect: (ModelInfo) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val isCurrent = current?.key == model.key
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (isCurrent) scheme.primary.copy(alpha = 0.1f) else scheme.surface)
+            .clickable {
+                onSelect(model)
+                onDismiss()
+            }
+            .padding(horizontal = 14.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                model.name.ifBlank { model.id },
+                style = MaterialTheme.typography.bodyLarge,
+                color = scheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            val meta = buildList {
+                add(model.provider)
+                model.contextWindow?.let { add("${shortNumber(it)} ctx") }
+                if (model.supportsImages) add(strings.vision)
+                if (model.reasoning) add(strings.reasoningTag)
+            }.joinToString(" \u2022 ")
+            Text(
+                meta,
+                style = MaterialTheme.typography.labelSmall,
+                color = scheme.onSurfaceVariant
+            )
+        }
+        if (isCurrent) {
+            Icon(
+                Icons.Default.Check,
+                contentDescription = strings.currentModel,
+                tint = scheme.primary,
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 }
@@ -464,7 +509,7 @@ fun TerminalSheet(
                 ) {
                     if (entries.isEmpty()) {
                         Text(
-                            "—",
+                            "â€”",
                             style = MonoStyle,
                             color = scheme.onSurfaceVariant
                         )

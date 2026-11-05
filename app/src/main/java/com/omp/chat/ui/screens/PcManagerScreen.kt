@@ -23,7 +23,8 @@ import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -48,6 +49,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -244,6 +248,8 @@ private fun PcCard(
     onDelete: () -> Unit
 ) {
     var showPowerOff by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var deleteCountdown by remember { mutableStateOf(10) }
     val statusColor = when (status) {
         "connected" -> NimayActive
         "pc_available" -> NimayAccent
@@ -330,7 +336,7 @@ private fun PcCard(
                 IconButton(onClick = onEdit) {
                     Icon(Icons.Default.Edit, contentDescription = "Rediger", tint = NimayTextSecondary)
                 }
-                IconButton(onClick = onDelete) {
+                IconButton(onClick = { showDeleteConfirm = true }) {
                     Icon(Icons.Default.Delete, contentDescription = "Slett", tint = NimayError)
                 }
             }
@@ -349,6 +355,30 @@ private fun PcCard(
             },
             dismissButton = {
                 TextButton(onClick = { showPowerOff = false }) { Text("Avbryt") }
+            }
+        )
+    }
+    if (showDeleteConfirm) {
+        LaunchedEffect(showDeleteConfirm) {
+            deleteCountdown = 10
+            for (i in 10 downTo 1) {
+                deleteCountdown = i
+                kotlinx.coroutines.delay(1000)
+            }
+            showDeleteConfirm = false
+        }
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Slett PC?") },
+            text = { Text("Er du sikker på at du vil slette denne PC-en? ($deleteCountdown)") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    onDelete()
+                }) { Text("Slett", color = NimayError) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("Avbryt") }
             }
         )
     }
@@ -390,7 +420,24 @@ private fun PcEditDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(6.dp))
-                OutlinedTextField(value = token, onValueChange = { token = it }, label = { Text("Token") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                var showToken by remember { mutableStateOf(false) }
+                OutlinedTextField(
+                    value = token,
+                    onValueChange = { token = it },
+                    label = { Text("Token") },
+                    singleLine = true,
+                    visualTransformation = if (showToken) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showToken = !showToken }) {
+                            Icon(
+                                if (showToken) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (showToken) "Skjul" else "Vis",
+                                tint = NimayTextSecondary
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
                 Spacer(Modifier.height(6.dp))
                 OutlinedTextField(value = mac, onValueChange = { mac = it }, label = { Text("MAC-adresse (for WOL)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(6.dp))
@@ -408,8 +455,6 @@ private fun PcEditDialog(
                 if (useDocker) {
                     Spacer(Modifier.height(6.dp))
                     OutlinedTextField(value = dockerUrl, onValueChange = { dockerUrl = it }, label = { Text("WOL-tjeneste URL") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    Spacer(Modifier.height(6.dp))
-                    OutlinedTextField(value = dockerToken, onValueChange = { dockerToken = it }, label = { Text("WOL-tjeneste token") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Switch(checked = autoConnect, onCheckedChange = { autoConnect = it })
