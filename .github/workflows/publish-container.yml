@@ -1,0 +1,64 @@
+name: Publish Linux Bridge Container
+
+# Publiserer container-imaget til GitHub Container Registry.
+#
+# Pakker publisert fra en workflow med GITHUB_TOKEN arver repoets
+# synlighet, og blir dermed offentlige. Pakker publisert utenfra med
+# et personlig token blir alltid private, og GitHub har ingen API for
+# aa endre synlighet etterpå.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Versjon som tagges (f.eks. 1.0.0). Tom = bare latest.'
+        required: false
+        default: ''
+  push:
+    tags:
+      - 'linux-bridge-*'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hent kildekoden
+        uses: actions/checkout@v4
+
+      - name: Installer Podman
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y podman
+
+      - name: Bygg image
+        working-directory: linux-bridge
+        run: |
+          podman build \
+            --tag "ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}/omp-bridge:latest" \
+            --file Containerfile \
+            .
+
+      - name: Publiser image
+        env:
+          REGISTRY: ghcr.io
+          IMAGE_NAME: ${{ github.repository_owner }}/${{ github.event.repository.name }}/omp-bridge
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | podman login "$REGISTRY" \
+            --username "${{ github.actor }}" \
+            --password-stdin
+
+          podman push "$REGISTRY/$IMAGE_NAME:latest"
+
+          VERSION="${{ inputs.version }}"
+          if [ -z "$VERSION" ]; then
+            VERSION="${GITHUB_REF#refs/tags/linux-bridge-}"
+          fi
+          if [ -n "$VERSION" ]; then
+            podman tag "$REGISTRY/$IMAGE_NAME:latest" "$REGISTRY/$IMAGE_NAME:$VERSION"
+            podman push "$REGISTRY/$IMAGE_NAME:$VERSION"
+          fi
+
+          podman logout "$REGISTRY"

@@ -41,12 +41,36 @@ done
 
 # Velg foerste kandidat som faktisk KJOERER. En omp som ikke kan startes
 # (f.eks. fordi bun mangler i PATH) er like verdtloest som en som mangler.
+#
+# omp-bin.txt kan ha to former:
+#   /path/omp            - en vanlig kjørbar fil
+#   /path/bun|/path/cli.js - et bun-skript, startet med bun
+# Broen forstaer begge, og den andre forma er noedvendig for omp
+# fra npm, siden cli.js har shebang "#!/usr/bin/env bun".
 OMP=""
+OMP_VALUE=""
 while IFS= read -r candidate; do
     [ -z "$candidate" ] && continue
     [ -x "$candidate" ] || continue
-    if PATH="$SERVICE_PATH:$PATH" "$candidate" --version >/dev/null 2>&1; then        OMP="$candidate"
-        break
+    # omp er et bun-skript (shebang "#!/usr/bin/env bun"). Kjøres den
+    # med node, gir den en feilmelding i stedet for versjonen. Derfor
+    # testes den med bun når den er et skript, og ellers direkte.
+    if head -1 "$candidate" 2>/dev/null | grep -q "bun"; then
+        BUN="$(command -v bun 2>/dev/null)"
+        [ -n "$BUN" ] || continue
+        OUT_VER="$(PATH="$SERVICE_PATH:$PATH" "$BUN" "$candidate" --version 2>/dev/null | head -1)"
+        if echo "$OUT_VER" | grep -q "^omp/"; then
+            OMP="$BUN"
+            OMP_VALUE="$BUN|$candidate"
+            break
+        fi
+    else
+        OUT_VER="$(PATH="$SERVICE_PATH:$PATH" "$candidate" --version 2>/dev/null | head -1)"
+        if echo "$OUT_VER" | grep -q "^omp/"; then
+            OMP="$candidate"
+            OMP_VALUE="$candidate"
+            break
+        fi
     fi
 done <<EOF
 $CANDIDATES
@@ -59,6 +83,6 @@ if [ -z "$OMP" ]; then
     exit 1
 fi
 
-printf '%s' "$OMP" > "$OUT"
+printf '%s' "$OMP_VALUE" > "$OUT"
 chmod 0644 "$OUT"
-echo "Skrev $OUT: $OMP"
+echo "Skrev $OUT: $OMP_VALUE"

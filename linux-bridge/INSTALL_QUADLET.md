@@ -1,32 +1,61 @@
 # Installasjonsguide: Bazzite / Silverblue / uBlue / uCore (Quadlet)
 
 ## Hva er Quadlet?
+
 Quadlet er systemd-integrasjon for Podman-containere. Det lar deg kjøre containere som systemd-tjenester uten rot-skrift til filsystemet – perfekt for immutable OS som Bazzite, Silverblue, uBlue, uCore, Fedora Silverblue.
 
 ---
 
 ## Forutsetninger
 
-- Bazzite / Fedora Silverblue / uBlue / uCore / uCore
+- Bazzite / Fedora Silverblue / uBlue / uCore
 - Podman + systemd (standard på alle ovennevnte)
 - Bruker med sudo-tilgang
+- **OMP installert på verten.** Containeren har OMP innebygd, men brukeren din trenger også OMP lokalt hvis du vil bruke `omp` fra terminalen.
+
+---
+
+## Viktig: hva containeren trenger fra verten
+
+Containeren kjører med UID 1000 (`omp`-brukeren i image-et) og trenger to ting fra verten:
+
+| Hva | Hvorfor | Eierskap |
+|---|---|---|
+| `~/.omp` | OMP lagrer **autentiseringen** i `agent.db` og modellkonfigurasjonen i `models.yml`. Uten hele `~/.omp` får broen ingen modeller og svarer «No models available». | UID 1000 |
+| `/opt/nimay-omp-bridge` | Konfigurasjon, token og logger. | UID 1000 |
+
+**`~/.omp` må eies av UID 1000.** Ellers får broen `EACCES: permission denied, mkdir '/home/omp/.omp/agent'` og alle forespørsler feiler.
 
 ---
 
 ## Installasjon (som root)
 
 ```bash
-# 1. Kopier Quadlet-fil til systemd
+# 1. Bygg container-imaget
+cd linux-bridge
+podman build -t nimay-omp-bridge:latest -f Containerfile .
+
+# 2. Kopier Quadlet-fil til systemd
 sudo cp nimay-omp-bridge.container /etc/containers/systemd/
 
-# 2. Oppdater brukernavn i .container-filen (erstatt <BRUKER> med ditt brukernavn)
+# 3. Oppdater brukernavn i .container-filen (erstatt <BRUKER> med ditt brukernavn)
 sudo sed -i 's/<BRUKER>/din_brukernavn/g' /etc/containers/systemd/nimay-omp-bridge.container
 
-# 3. Last systemd-konfigurasjon
-systemctl daemon-reload
+# 4. Gi ~/.omp riktig eierskap slik at containeren kan skrive til den
+sudo mkdir -p "$HOME/.omp"
+sudo chown -R 1000:1000 "$HOME/.omp"
 
-# 4. Aktiver og start tjenesten
-systemctl enable --now nimay-omp-bridge
+# 5. Last systemd-konfigurasjon
+sudo systemctl daemon-reload
+
+# 6. Aktiver og start tjenesten
+sudo systemctl enable --now nimay-omp-bridge
+```
+
+Trenger du OMP-modeller? Sørg for at `~/.omp/agent/models.yml` og `~/.omp/agent/agent.db` finnes, og at de er eid av UID 1000:
+
+```bash
+sudo chown -R 1000:1000 "$HOME/.omp"
 ```
 
 ---
@@ -45,101 +74,83 @@ systemctl is-enabled nimay-omp-bridge
 ss -tln | grep 7802
 # → LISTEN 0.0.0.0:7802
 
+# Hent token fra containeren
+TOKEN=$(podman exec nimay-omp-bridge node -e 'console.log(JSON.parse(require("fs").readFileSync("/opt/nimay-omp-bridge/config.json","utf8")).token)')
+
 # Test API
-TOKEN=$(cat /opt/nimay-omp-bridge/token)
 curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:7802/api/ping
-# → {"ok":true,"name":"omp-bridge","version":"2.9.24","port":7802,...}
+# → {"ok":true,"name":"omp-bridge","version":"2.9.25","port":7802,...}
 ```
 
 ---
 
 ## Konfigurasjon
 
-Token genereres automatisk på første oppstart. Finn token:
+Token genereres automatisk ved første oppstart og ligger i `config.json` inne i containeren:
+
 ```bash
-cat /opt/nimay-omp-bridge/token
+podman exec nimay-omp-bridge cat /opt/nimay-omp-bridge/config.json
 ```
 
-### Endre konfigurasjon
-Rediger `/opt/nimay-omp-bridge/config.json` (krever restart):
+Porten kan endres i `config.template.json` før bygging, eller ved å redigere `config.json` og restarte:
+
 ```bash
 sudo systemctl restart nimay-omp-bridge
 ```
-
-### Loggføring
-```bash
-journalctl -u nimay-omp-bridge -f
-```
-
----
-
-## Oppdatering
-```bash
-# Hent ny container-image
-podman pull ghcr.io/nimay/omp-bridge:latest
-
-# Eller bygg lokalt
-podman build -t nimay-omp-bridge:latest -f Containerfile .
-
-# Restart for å bruke nytt image
-systemctl restart nimay-omp-bridge
-```
-
----
-
-## Fjerning
-```bash
-systemctl stop nimay-omp-bridge
-systemctl disable nimay-omp-bridge
-sudo rm /etc/containers/systemd/nimay-omp-bridge.container
-systemctl daemon-reload
-```
-
----
-
-## Funksjoner
-
-| Funksjon | Støttet |
-|----------|---------|
-| Autostart ved boot | ✅ |
-| Ikke-root bruker | ✅ (kjøres som din bruker) |
-| Tilgang til `~/.omp` | ✅ (volume mount) |
-| `omp` i PATH | ✅ |
-| Auto-oppdatering | ✅ `podman auto-update` |
-| Logg i journalctl | ✅ `journalctl -u nimay-omp-bridge -f` |
 
 ---
 
 ## Feilsøking
 
-| Problem | Løsning |
-|---------|---------|
-| Container starter ikke | `journalctl -u nimay-omp-bridge -f` |
-| Port 7802 allerede i bruk | `ss -tlnp | grep 7802` |
-| Ingen tilgang til `~/.omp` | Sjekk at `User=<din_bruker>` i `.container` |
-| Ingen tilgang til `omp` | Sjekk at `PATH` i `.container` inneholder brukerens bin-mapper |
+### «No models available» eller `OMP svarte ikke innen 60 sekunder`
 
----
-
-## Avansert: Bygg eget image
+Containeren finner ikke auth-konfigurasjonen. Sjekk at `~/.omp/agent/` inneholder `models.yml` og `agent.db`, og at mappen er eid av UID 1000:
 
 ```bash
-# Bygg lokalt
+sudo chown -R 1000:1000 "$HOME/.omp"
+podman exec nimay-omp-bridge ls -la /home/omp/.omp/agent/
+```
+
+### `EACCES: permission denied, mkdir '/home/omp/.omp/agent'`
+
+Samme årsak. `~/.omp` eies av feil bruker. Se over.
+
+### `spawn .../omp.exe ENOENT`
+
+`omp-bin.txt` peker på en Windows-sti. Bygg image-et på nytt, så blir den skrevet med riktig verdi:
+
+```bash
 podman build -t nimay-omp-bridge:latest -f Containerfile .
+```
 
-# Oppdater .container-fil til å bruke lokalt image:
-# Image=nimay-omp-bridge:latest
+### `Error: unknown flag: --entry`
 
-# Eller publiser til GHCR:
-podman push localhost/nimay-omp-bridge:latest ghcr.io/nimay/omp-bridge:latest
-# Oppdater .container: Image=ghcr.io/nimay/omp-bridge:latest
+Bruker en gammel `omp-bridge.mjs`. Kopier den nyeste fra `bridge/omp-bridge.mjs`.
+
+### Containeren dør med `EADDRINUSE` på port 7802
+
+Den native tjenesten kjører allerede på porten. Stopp den:
+
+```bash
+sudo systemctl disable --now nimay-omp-bridge
 ```
 
 ---
 
-## Sikkerhet
+## Oppdatering
 
-- Kjører som din bruker (ikke root)
-- Volume mounts med `:Z` (SELinux-konforme)
-- Token i `/opt/nimay-omp-bridge/token` (0600)
-- Kun port 7802 eksponert (host network)
+```bash
+cd linux-bridge
+podman build -t nimay-omp-bridge:latest -f Containerfile .
+sudo systemctl restart nimay-omp-bridge
+```
+
+Image-et er lokalt. For automatisk oppdatering fra et registry må image-et publiseres dit, og `Image=` i `.container`-filen pekes dit.
+
+---
+
+## Se også
+
+- `README.md` – oversikt over alle Linux-variantene
+- `INSTALL_DEBIAN.md` – Debian/Ubuntu/Mint/Pop!_OS
+- `INSTALL_FEDORA.md` – Fedora/RHEL/CentOS/AlmaLinux/Rocky

@@ -61,8 +61,15 @@ if [[ "$USE_CONTAINER" == "true" ]]; then
     echo "ERROR: podman er påkrevd for --container" >&2
     exit 1
   fi
-  echo "[info] bygger container-image..."
-  podman build -t nimay-omp-bridge:latest -f "$HERE/Containerfile" "$HERE"
+  echo "[info] henter container-image..."
+  # Det publiserte image-et hentes narere. Kun hvis det ikke finnes,
+  # bygges det lokalt fra Containerfile.
+  if ! podman pull ghcr.io/megaxenon83-server/omp-bridge:latest 2>/dev/null; then
+    echo "[info] publisert image kunne ikke hentes, bygger lokalt..."
+    podman build -t ghcr.io/megaxenon83-server/omp-bridge:latest -f "$HERE/Containerfile" "$HERE"
+  else
+    echo "[info] hentet ghcr.io/megaxenon83-server/omp-bridge:latest"
+  fi
 
   CONTAINER_DIR="/etc/containers/systemd"
   mkdir -p "$CONTAINER_DIR"
@@ -76,6 +83,20 @@ if [[ "$USE_CONTAINER" == "true" ]]; then
   fi
   sed -i "s|<BRUKER>|$CONTAINER_USER|g" "$CONTAINER_DIR/nimay-omp-bridge.container"
 
+  # ~/.omp maa vaere eid av UID 1000, ellers kan ikke broen skrive
+  # agent-databasen der (EACCES ved mkdir).
+  CONTAINER_HOME="$(getent passwd "$CONTAINER_USER" | cut -d: -f6)"
+  mkdir -p "$CONTAINER_HOME/.omp"
+  chown -R 1000:1000 "$CONTAINER_HOME/.omp"
+  echo "[info] ~/.omp eies av UID 1000 for container-tilgang"
+
+  # Advar om portkonflikt. Den native tjenesten holder port 7802, og
+  # containeren kan ikke starte mens den kjører.
+  if systemctl is-active --quiet nimay-omp-bridge 2>/dev/null; then
+    echo "[info] stopper den native tjenesten (den holder port 7802)"
+    systemctl stop nimay-omp-bridge
+  fi
+
   systemctl daemon-reload
   systemctl enable --now nimay-omp-bridge
   echo
@@ -84,6 +105,9 @@ if [[ "$USE_CONTAINER" == "true" ]]; then
   echo "  Image:         nimay-omp-bridge:latest"
   echo "  Bruker:        $CONTAINER_USER"
   echo "  Port:          7802"
+  echo
+  echo "  Token:"
+  podman exec nimay-omp-bridge node -e 'console.log(JSON.parse(require("fs").readFileSync("/opt/nimay-omp-bridge/config.json","utf8")).token)' 2>/dev/null | sed 's/^/    /'
   echo "==============================================================="
   exit 0
 fi

@@ -4,8 +4,28 @@
 
 FROM registry.fedoraproject.org/fedora-minimal:40
 
-# Installer Node.js 20, bun, og nødvendige verktøy
-RUN microdnf install -y nodejs bun findutils && microdnf clean all
+# Installer Node.js, bun og nødvendige verktøy.
+#
+# "bun" finnes ikke i Fedora 40-repos, så bun-lastes fra GitHub-releases.
+# unzip trengs for å pakke ut zip-fila.
+RUN microdnf install -y findutils tar gzip unzip shadow-utils \
+    && microdnf install -y --nodocs curl \
+    && microdnf clean all
+
+# Bun fra GitHub-releases (fastet ned versjon, ingen installasjonsskript),
+# og Node.js fra repoene.
+#
+# omp krever bun >= 1.4.4, saa en eldre bun gir feilmelding i stedet
+# for versjonsnummeret. 1.4.4 er den versjonen Windows-installasjonen
+# bruker, saa containeren og PC-en oppfører seg likt.
+ARG BUN_VERSION=1.4.4
+RUN curl -fsSL -o /tmp/bun.zip \
+      "https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-x64.zip" \
+    && unzip -q /tmp/bun.zip -d /tmp/bun \
+    && install -m 0755 /tmp/bun/bun-linux-x64/bun /usr/local/bin/bun \
+    && rm -rf /tmp/bun /tmp/bun.zip \
+    && microdnf install -y nodejs \
+    && microdnf clean all
 
 # Opprett bruker (kan overskrives med --build-arg)
 ARG USERNAME=omp
@@ -29,10 +49,26 @@ COPY payload/nimay-omp-bridge.service /opt/nimay-omp-bridge/
 # Sett rettigheter
 RUN chown -R omp:omp /opt/nimay-omp-bridge /home/omp
 
+# Installer OMP (Oh My Pi) som tjenestebrukeren. Uten denne kan
+# broen ikke starte omp i det hele tatt, og alle spawn-kall feiler
+# med ENOENT.
+#
+# npm-cachen (220 MB) slettes etterpå; den fyller ellers image-et
+# uten å bidra til noe.
+USER omp
+WORKDIR /home/omp
+RUN npm install -g --prefix /home/omp/.local @oh-my-pi/pi-coding-agent \
+    && rm -rf /home/omp/.npm \
+    && mkdir -p /home/omp/.omp \
+    && chown -R omp:omp /home/omp/.local /home/omp/.omp
+
 # Pek broen pa riktig omp-binary. Uten denne fila faller broen tilbake
 # pa ~/.bun/bin/omp.exe, som er en Windows-sti og aldri finnes i
 # containeren. Da feiler alle spawn-kall med ENOENT.
-RUN /opt/nimay-omp-bridge/scripts/write-omp-bin.sh /opt/nimay-omp-bridge || \
+#
+# SERVICE_HOME settes til tjenestebrukerens home, ellers letes omp
+# i /root i stedet for /home/omp.
+RUN SERVICE_HOME=/home/omp /opt/nimay-omp-bridge/scripts/write-omp-bin.sh /opt/nimay-omp-bridge || \
     echo "ADVARSEL: fant ingen omp i containeren"
 
 # Bruk omp-bruker
@@ -42,6 +78,17 @@ WORKDIR /opt/nimay-omp-bridge
 # Sett miljøvariabler
 ENV HOME=/home/omp
 ENV PATH=/home/omp/.local/bin:/home/omp/.bun/bin:/usr/local/bin:/usr/bin:/bin
+
+# Generer config.json ved oppstart. Uten denne mangler configen, og
+# broen avslutter med "config.json not found".
+#
+# Tokenet genereres her, og overlever i containeren (/opt er et
+# bind-mount mot verten, saa det samme tokenet gjenbruges ved omstart).
+RUN if [ ! -f /opt/nimay-omp-bridge/config.json ]; then \
+        sed -e 's/__PORT__/7802/' -e "s/__TOKEN__/$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')/" \
+            /opt/nimay-omp-bridge/config.template.json > /opt/nimay-omp-bridge/config.json \
+        && chmod 600 /opt/nimay-omp-bridge/config.json; \
+    fi
 
 # Port
 EXPOSE 7802
