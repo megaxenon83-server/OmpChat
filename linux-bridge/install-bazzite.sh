@@ -125,10 +125,11 @@ if [ ! -f "$CONFIG_DIR/config.template.json" ]; then
   podman run --rm --entrypoint cat "$IMAGE" /opt/nimay-omp-bridge/config.template.json \
     > "$CONFIG_DIR/config.template.json" 2>/dev/null || true
 fi
-# Mounten dekker bare config.json. Malen maa derfor vaere tilgjengelig
-# i /opt/nimay-omp-bridge i containeren, og det leser entrypoint-en.
-cp "$CONFIG_DIR/config.template.json" "$CONFIG_DIR/../config.template.json" 2>/dev/null || true
-chown -R 1000:1000 "$CONFIG_DIR" "$CONFIG_DIR/.." 2>/dev/null || true
+# Filen som mountes maa finnes pa verten for containeren skal kunne starte.
+# Podman feiler med "statfs ... no such file or directory" ellers.
+# Tom fil er nok: entrypointen genererer den ekte configen ved oppstart.
+[ -f "$CONFIG_DIR/config.json" ] || : > "$CONFIG_DIR/config.json"
+chown -R 1000:1000 "$CONFIG_DIR"
 echo "[info] config: $CONFIG_DIR (tokenet overlever omstart)"
 
 # --- Quadlet-enhet ------------------------------------------------------------

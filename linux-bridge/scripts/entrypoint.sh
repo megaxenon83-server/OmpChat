@@ -4,36 +4,28 @@
 # Genererer config.json ved oppstart hvis den mangler, og starter deretter
 # broen med de argumentene den ble kalt med.
 #
-# Broen leser config.json fra /opt/nimay-omp-bridge (HERE). For at
-# tokenet skal overleve omstarter, ligger config.json pa en bind-mount
-# fra verten. Derfor skriver vi til mounten, og bruker en symlink slik at
-# broen finner den pa vanlig plass.
+# Broen leser config.json fra /opt/nimay-omp-bridge (HERE). Filen er
+# bind-mountet fra verten, slik at tokenet overlever omstarter og
+# paringen i appen gaar ikke tapt.
 set -e
 
 BRIDGE_DIR="/opt/nimay-omp-bridge"
 CONFIG="$BRIDGE_DIR/config.json"
 TEMPLATE="$BRIDGE_DIR/config.template.json"
 
-# Mounten over config.json maa ogsa ha malen, slik at vi kan lage
-# config.json selv om bildet endres.
+# Malen maa vaere tilgjengelig. Hvis config.json er en bind-mount av en
+# fil, ligger malen i image-et og er derfor tilgjengelig her.
 if [ ! -f "$TEMPLATE" ] && [ -f "$(dirname "$CONFIG")/config.template.json" ]; then
   cp "$(dirname "$CONFIG")/config.template.json" "$TEMPLATE" 2>/dev/null || true
 fi
 
-if [ ! -f "$CONFIG" ]; then
+# Er config.json tom (mountet fra en tom fil), skriver vi den.
+if [ ! -s "$CONFIG" ] && [ -f "$TEMPLATE" ]; then
   PORT="${OMP_PORT:-7802}"
   TOKEN="$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
-  if [ -f "$TEMPLATE" ]; then
-    # Skriv til mounten, slik at config.json overlever omstarter.
-    if [ -w "$(dirname "$CONFIG")" ]; then
-      sed -e "s/__PORT__/$PORT/" -e "s/__TOKEN__/$TOKEN/" "$TEMPLATE" \
-        > "$(dirname "$CONFIG")/config.json.new"
-      mv "$(dirname "$CONFIG")/config.json.new" "$CONFIG" 2>/dev/null || \
-        cp "$(dirname "$CONFIG")/config.json.new" "$CONFIG"
-      chmod 600 "$CONFIG" 2>/dev/null || true
-      echo "[bridge] genererte config.json med nytt token (port $PORT)"
-    fi
-  fi
+  sed -e "s/__PORT__/$PORT/" -e "s/__TOKEN__/$TOKEN/" "$TEMPLATE" > "$CONFIG"
+  chmod 600 "$CONFIG" 2>/dev/null || true
+  echo "[bridge] genererte config.json med nytt token (port $PORT)"
 fi
 
 exec "$@"

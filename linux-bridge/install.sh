@@ -119,6 +119,10 @@ if [[ "$USE_CONTAINER" == "true" ]]; then
     podman run --rm --entrypoint cat ghcr.io/megaxenon83-server/ompchat/omp-bridge:latest \
       /opt/nimay-omp-bridge/config.template.json > "$CONFIG_DIR/config.template.json" 2>/dev/null || true
   fi
+  # Filen som mountes maa finnes pa verten, ellers feiler podman med
+  # "statfs ... no such file or directory". Tom fil er nok: entrypointen
+  # genererer den ekte configen ved oppstart.
+  [ -f "$CONFIG_DIR/config.json" ] || : > "$CONFIG_DIR/config.json"
   chown -R 1000:1000 "$CONFIG_DIR"
   echo "[info] config: $CONFIG_DIR (tokenet overlever omstart)"
 
