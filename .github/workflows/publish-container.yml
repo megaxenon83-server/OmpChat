@@ -33,35 +33,39 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y podman
 
+      # GHCR krever lowercase i pakkenavnet, mens repoet kan ha stor O.
+      # Derfor settes GHCR_IMAGE i et tidligere steg, slik at det brukes
+      # som en vanlig miljøvariabel (ikke interpolert i YAML).
+      - name: Sett image-navn
+        run: |
+          echo "GHCR_IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER}/$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')/omp-bridge" >> "$GITHUB_ENV"
+          echo "Image: $GHCR_IMAGE"
+
       - name: Bygg image
         working-directory: linux-bridge
-        env:
-          # GHCR krever lowercase i pakkenavnet, mens repoet kan ha stor O.
-          IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}/omp-bridge
         run: |
           podman build \
-            --tag "${IMAGE_NAME}:latest" \
+            --tag "${GHCR_IMAGE}:latest" \
             --file Containerfile \
             .
 
       - name: Publiser image
         env:
           REGISTRY: ghcr.io
-          IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}/omp-bridge
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | podman login "$REGISTRY" \
-            --username "${{ github.actor }}" \
+          echo "${GITHUB_TOKEN}" | podman login "$REGISTRY" \
+            --username "${GITHUB_ACTOR}" \
             --password-stdin
 
-          podman push "$REGISTRY/$IMAGE_NAME:latest"
+          podman push "${GHCR_IMAGE}:latest"
 
           VERSION="${{ inputs.version }}"
           if [ -z "$VERSION" ]; then
             VERSION="${GITHUB_REF#refs/tags/linux-bridge-}"
           fi
           if [ -n "$VERSION" ]; then
-            podman tag "$REGISTRY/$IMAGE_NAME:latest" "$REGISTRY/$IMAGE_NAME:$VERSION"
-            podman push "$REGISTRY/$IMAGE_NAME:$VERSION"
+            podman tag "${GHCR_IMAGE}:latest" "${GHCR_IMAGE}:${VERSION}"
+            podman push "${GHCR_IMAGE}:${VERSION}"
           fi
 
           podman logout "$REGISTRY"
