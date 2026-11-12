@@ -31,25 +31,43 @@ Containeren kjører med UID 1000 (`omp`-brukeren i image-et) og trenger to ting 
 ## Installasjon (som root)
 
 ```bash
-# 1. Bygg container-imaget
-cd linux-bridge
-podman build -t nimay-omp-bridge:latest -f Containerfile .
-
-# 2. Kopier Quadlet-fil til systemd
+# 1. Kopier Quadlet-fil til systemd
 sudo cp nimay-omp-bridge.container /etc/containers/systemd/
 
-# 3. Oppdater brukernavn i .container-filen (erstatt <BRUKER> med ditt brukernavn)
+# 2. Oppdater brukernavn i .container-filen (erstatt <BRUKER> med ditt brukernavn)
 sudo sed -i 's/<BRUKER>/din_brukernavn/g' /etc/containers/systemd/nimay-omp-bridge.container
 
-# 4. Gi ~/.omp riktig eierskap slik at containeren kan skrive til den
+# 3. Gi ~/.omp riktig eierskap slik at containeren kan skrive til den
 sudo mkdir -p "$HOME/.omp"
 sudo chown -R 1000:1000 "$HOME/.omp"
 
-# 5. Last systemd-konfigurasjon
+# 4. Last systemd-konfigurasjon
 sudo systemctl daemon-reload
 
-# 6. Aktiver og start tjenesten
+# 5. Aktiver og start tjenesten
 sudo systemctl enable --now nimay-omp-bridge
+```
+
+Eller bruk installasjonsskriptet, som gjør alt dette for deg:
+
+```bash
+sudo ./install.sh --container
+```
+
+### Image
+
+`.container`-filen peker på det ferdigbygde image-et:
+
+```
+ghcr.io/megaxenon83-server/ompchat/omp-bridge:latest
+```
+
+Det hentes automatisk. For å bygge lokalt i stedet:
+
+```bash
+podman build -t nimay-omp-bridge:latest -f Containerfile .
+sudo sed -i 's|ghcr.io/megaxenon83-server/ompchat/omp-bridge:latest|nimay-omp-bridge:latest|' \
+  /etc/containers/systemd/nimay-omp-bridge.container
 ```
 
 Trenger du OMP-modeller? Sørg for at `~/.omp/agent/models.yml` og `~/.omp/agent/agent.db` finnes, og at de er eid av UID 1000:

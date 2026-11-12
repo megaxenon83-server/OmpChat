@@ -64,11 +64,11 @@ if [[ "$USE_CONTAINER" == "true" ]]; then
   echo "[info] henter container-image..."
   # Det publiserte image-et hentes narere. Kun hvis det ikke finnes,
   # bygges det lokalt fra Containerfile.
-  if ! podman pull ghcr.io/megaxenon83-server/omp-bridge:latest 2>/dev/null; then
+  if ! podman pull ghcr.io/megaxenon83-server/ompchat/omp-bridge:latest 2>/dev/null; then
     echo "[info] publisert image kunne ikke hentes, bygger lokalt..."
-    podman build -t ghcr.io/megaxenon83-server/omp-bridge:latest -f "$HERE/Containerfile" "$HERE"
+    podman build -t ghcr.io/megaxenon83-server/ompchat/omp-bridge:latest -f "$HERE/Containerfile" "$HERE"
   else
-    echo "[info] hentet ghcr.io/megaxenon83-server/omp-bridge:latest"
+    echo "[info] hentet ghcr.io/megaxenon83-server/ompchat/omp-bridge:latest"
   fi
 
   CONTAINER_DIR="/etc/containers/systemd"

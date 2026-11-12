@@ -6,7 +6,7 @@ Wants=network-online.target
 
 [Container]
 # Ferdigbygd image, publisert til GitHub Container Registry.
-Image=ghcr.io/megaxenon83-server/omp-bridge:latest
+Image=ghcr.io/megaxenon83-server/ompchat/omp-bridge:latest
 # Eller bygg lokalt: Image=nimay-omp-bridge:latest
 # Bygg med: podman build -t nimay-omp-bridge:latest -f Containerfile .
 
