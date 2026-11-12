@@ -33,12 +33,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y podman
 
-      # GHCR krever lowercase i pakkenavnet, mens repoet kan ha stor O.
-      # Derfor settes GHCR_IMAGE i et tidligere steg, slik at det brukes
-      # som en vanlig miljøvariabel (ikke interpolert i YAML).
+      # GHCR krever lowercase i pakkenavnet, og GITHUB_REPOSITORY inneholder
+      # allerede eier-prefixet. Derfor brukes GITHUB_REPOSITORY (ikke
+      # repository_owner + repository_name), og pakkenavnet settes i
+      # GITHUB_ENV slik at det ikke interpoleres i YAML.
       - name: Sett image-navn
         run: |
-          echo "GHCR_IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER}/$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')/omp-bridge" >> "$GITHUB_ENV"
+          echo "GHCR_IMAGE=ghcr.io/$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')/omp-bridge" >> "$GITHUB_ENV"
           echo "Image: $GHCR_IMAGE"
 
       - name: Bygg image
