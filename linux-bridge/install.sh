@@ -90,7 +90,6 @@ if [[ "$USE_CONTAINER" == "true" ]]; then
   sed -i "s|<OMP_STATE>|$OMP_STATE_DIR|g" "$CONTAINER_DIR/$UNIT_NAME.container"
   sed -i "s|<USER_HOME>|$CONTAINER_HOME|g" "$CONTAINER_DIR/$UNIT_NAME.container"
   sed -i "s|<CONFIG_DIR>|$CONFIG_DIR|g" "$CONTAINER_DIR/$UNIT_NAME.container"
-
   # /opt/nimay-omp-bridge mountes inn i containeren, og podman krever at
   # mappen finnes pa verten. Uten den feiler tjenesten med
   # "statfs /opt/nimay-omp-bridge: no such file or directory".

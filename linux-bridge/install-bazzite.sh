@@ -116,15 +116,19 @@ echo "[info] tilstand: $OMP_STATE_DIR (eies av UID 1000)"
 
 # Config-mappen pa verten. Tokenet ligger her, saa det overlever
 # omstarter og paringen i appen gaar ikke tapt.
+#
+# Malen hentes fra image-et, saa verten og containeren bruker samme
+# oppsett.
 CONFIG_DIR="/var/lib/nimay-omp-bridge/config"
 mkdir -p "$CONFIG_DIR"
-# Malen maa vaere tilgjengelig, ellers kan entrypoint-en ikke lage
-# config.json. Den hentes fra image-et.
 if [ ! -f "$CONFIG_DIR/config.template.json" ]; then
   podman run --rm --entrypoint cat "$IMAGE" /opt/nimay-omp-bridge/config.template.json \
     > "$CONFIG_DIR/config.template.json" 2>/dev/null || true
 fi
-chown -R 1000:1000 "$CONFIG_DIR"
+# Mounten dekker bare config.json. Malen maa derfor vaere tilgjengelig
+# i /opt/nimay-omp-bridge i containeren, og det leser entrypoint-en.
+cp "$CONFIG_DIR/config.template.json" "$CONFIG_DIR/../config.template.json" 2>/dev/null || true
+chown -R 1000:1000 "$CONFIG_DIR" "$CONFIG_DIR/.." 2>/dev/null || true
 echo "[info] config: $CONFIG_DIR (tokenet overlever omstart)"
 
 # --- Quadlet-enhet ------------------------------------------------------------
@@ -148,19 +152,18 @@ Group=1000
 Environment=HOME=/home/omp
 Environment=OMP_HOME=/home/omp/.omp
 Environment=OMP_PORT=$PORT
-Environment=OMP_CONFIG_DIR=/opt/nimay-omp-bridge/config
 Environment=PATH=/home/omp/.local/bin:/home/omp/.bun/bin:/usr/local/bin:/usr/bin:/bin
 
 # ~/.omp maa eies av UID 1000, ellers kan ikke broen skrive
 # agent-databasen der. Se OMP_STATE_DIR over for hvor den ligger.
 Volume=$OMP_STATE_DIR:/home/omp/.omp:Z
 
-# Config-mappen (config.json med token og port) mountes fra verten,
-# saa tokenet overlever omstarter. Den maa vaere en egen mappe under
-# /opt/nimay-omp-bridge, siden broen leser config.json derfra.
+# Config.json (token og port) mountes fra verten, saa tokenet overlever
+# omstarter. Mounten maa dekke config.json direkte, siden broen leser
+# den fra /opt/nimay-omp-bridge.
 # (Hele /opt/nimay-omp-bridge kan ikke mountes - det ville skjult
 # bro-fila i image-et.)
-Volume=$CONFIG_DIR:/opt/nimay-omp-bridge/config:Z
+Volume=$CONFIG_DIR/config.json:/opt/nimay-omp-bridge/config.json:Z
 
 # Brukerens hjemmekatalog maa mountes inn, ellers finner broen ingen
 # prosjektmapper a jobbe i (og /home/<bruker> er ikke tilgjengelig
