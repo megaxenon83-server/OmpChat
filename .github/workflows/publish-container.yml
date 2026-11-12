@@ -53,11 +53,12 @@ jobs:
         env:
           REGISTRY: ghcr.io
         run: |
-          echo "${GITHUB_TOKEN}" | podman login "$REGISTRY" \
-            --username "${GITHUB_ACTOR}" \
-            --password-stdin
+          # podman login --password-stdin feiler i Actions-miljoet
+          # ("inappropriate ioctl for device"), saa --creds brukes
+          # direkte pa push i stedet.
+          CREDS="${GITHUB_ACTOR}:${GITHUB_TOKEN}"
 
-          podman push "${GHCR_IMAGE}:latest"
+          podman push --creds "${CREDS}" "${GHCR_IMAGE}:latest"
 
           VERSION="${{ inputs.version }}"
           if [ -z "$VERSION" ]; then
@@ -65,7 +66,5 @@ jobs:
           fi
           if [ -n "$VERSION" ]; then
             podman tag "${GHCR_IMAGE}:latest" "${GHCR_IMAGE}:${VERSION}"
-            podman push "${GHCR_IMAGE}:${VERSION}"
+            podman push --creds "${CREDS}" "${GHCR_IMAGE}:${VERSION}"
           fi
-
-          podman logout "$REGISTRY"
