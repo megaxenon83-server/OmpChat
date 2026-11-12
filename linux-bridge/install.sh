@@ -88,6 +88,7 @@ if [[ "$USE_CONTAINER" == "true" ]]; then
   sed -i "s|<BRUKER>|$CONTAINER_USER|g" "$CONTAINER_DIR/$UNIT_NAME.container"
   # Bind-mounten for ~/.omp ligger i /var/lib, ikke i brukerens home.
   sed -i "s|<OMP_STATE>|$OMP_STATE_DIR|g" "$CONTAINER_DIR/$UNIT_NAME.container"
+  sed -i "s|<USER_HOME>|$CONTAINER_HOME|g" "$CONTAINER_DIR/$UNIT_NAME.container"
 
   # /opt/nimay-omp-bridge mountes inn i containeren, og podman krever at
   # mappen finnes pa verten. Uten den feiler tjenesten med
@@ -122,6 +123,10 @@ if [[ "$USE_CONTAINER" == "true" ]]; then
     echo "[info] maskerer den native tjenesten (kolliderer med Quadlet-enheten)"
   fi
 
+  # UID 1000 maa ha traverse-rettighet gjennom /home/<bruker> for aa na
+  # prosjektmappene i containeren.
+  chmod o+x "$CONTAINER_HOME" 2>/dev/null || true
+
   systemctl daemon-reload
   # Quadlet-enheter er "transient or generated" og kan ikke enable's
   # mens de allerede er generert. De startes med start/restart, og
@@ -136,7 +141,14 @@ if [[ "$USE_CONTAINER" == "true" ]]; then
   echo "  Port:          7802"
   echo
   echo "  Token:"
-  podman exec "$UNIT_NAME" node -e 'console.log(JSON.parse(require("fs").readFileSync("/opt/nimay-omp-bridge/config.json","utf8")).token)' 2>/dev/null | sed 's/^/    /'
+  # Tokenet leses fra containeren. Quadlet gir containeren navnet
+  # "systemd-<enhetsnavn>", saa begge varianter sjekkes.
+  TOKEN=""
+  for candidate in "$UNIT_NAME" "systemd-$UNIT_NAME"; do
+    TOKEN="$(podman exec "$candidate" node -e 'console.log(JSON.parse(require("fs").readFileSync("/opt/nimay-omp-bridge/config.json","utf8")).token)' 2>/dev/null || true)"
+    [[ -n "$TOKEN" ]] && break
+  done
+  echo "    $TOKEN"
   echo "==============================================================="
   exit 0
 fi

@@ -32,6 +32,10 @@ Environment=PATH=/home/omp/.local/bin:/home/omp/.bun/bin:/usr/local/bin:/usr/bin
 # saa den legges i /var/lib framfor i /home/<bruker>, som ofte er eid
 # av root uten traverse-rettighet.
 Volume=<OMP_STATE>:/home/omp/.omp:Z
+
+# Brukerens hjemmekatalog mountes inn, slik at broen finner
+# prosjektmapper a jobbe i.
+Volume=<USER_HOME>:/home/user:Z
 Volume=/opt/nimay-omp-bridge:/opt/nimay-omp-bridge:Z
 
 # Nettverk: host-modus for enkel pairing (eller port mapping under)

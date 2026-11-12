@@ -140,6 +140,11 @@ Environment=PATH=/home/omp/.local/bin:/home/omp/.bun/bin:/usr/local/bin:/usr/bin
 # ~/.omp maa eies av UID 1000, ellers kan ikke broen skrive
 # agent-databasen der. Se OMP_STATE_DIR over for hvor den ligger.
 Volume=$OMP_STATE_DIR:/home/omp/.omp:Z
+
+# Brukerens hjemmekatalog maa mountes inn, ellers finner broen ingen
+# prosjektmapper a jobbe i (og /home/<bruker> er ikke tilgjengelig
+# for UID 1000 i containeren).
+Volume=$USER_HOME:/home/user:Z
 Network=host
 
 AutoUpdate=registry
@@ -153,6 +158,11 @@ RestartSec=3
 EOF
 
 echo "[info] skrev $UNIT"
+
+# UID 1000 maa ha traverse-rettighet gjennom /home/<bruker> for aa na
+# prosjektmappene i containeren. Uten det feiler broen med
+# "EACCES: permission denied, stat '/home/user/Documents'".
+chmod o+x "$USER_HOME" 2>/dev/null || true
 
 # Config.json genereres i containeren ved oppstart, fordi
 # /opt/nimay-omp-bridge ikke skal mountes fra verten: en mount der ville
@@ -209,8 +219,14 @@ if ! systemctl is-active --quiet "$UNIT_NAME"; then
 fi
 
 # --- Token -------------------------------------------------------------------
-TOKEN="$(podman exec "$UNIT_NAME" node -e \
-  'console.log(JSON.parse(require("fs").readFileSync("/opt/nimay-omp-bridge/config.json","utf8")).token)' 2>/dev/null || true)"
+# Tokenet leses fra containeren. Quadlet gir containeren navnet
+# "systemd-<enhetsnavn>", saa begge varianter sjekkes.
+TOKEN=""
+for candidate in "$UNIT_NAME" "systemd-$UNIT_NAME"; do
+  TOKEN="$(podman exec "$candidate" node -e \
+    'console.log(JSON.parse(require("fs").readFileSync("/opt/nimay-omp-bridge/config.json","utf8")).token)' 2>/dev/null || true)"
+  [[ -n "$TOKEN" ]] && break
+done
 
 IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 IP="${IP:-127.0.0.1}"
