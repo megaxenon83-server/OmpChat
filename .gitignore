@@ -35,7 +35,7 @@ linux-bridge/*.rpm
 linux-bridge/packaging/deb/*.deb
 linux-bridge/packaging/deb/nimay-omp-bridge_*.deb
 linux-bridge/packaging/rpm/*.rpm
-linux-bridge/payload/nimay-omp-bridge.service
+# Payload-mappen er kilde, ikke bygget output - den skal committes.
 
 # Release archive (built artifacts, not source)
 releases/
