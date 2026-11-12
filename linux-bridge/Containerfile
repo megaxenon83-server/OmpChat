@@ -1,0 +1,50 @@
+# Containerfile for Nimay OMP Bridge
+# Bygg: podman build -t nimay-omp-bridge:latest -f Containerfile .
+# Eller: podman build -t ghcr.io/nimay/omp-bridge:latest -f Containerfile .
+
+FROM registry.fedoraproject.org/fedora-minimal:40
+
+# Installer Node.js 20, bun, og nødvendige verktøy
+RUN microdnf install -y nodejs bun findutils && microdnf clean all
+
+# Opprett bruker (kan overskrives med --build-arg)
+ARG USERNAME=omp
+ARG USER_UID=1000
+ARG USER_GID=1000
+
+RUN groupadd -g ${USER_GID} omp \
+    && useradd -u ${USER_UID} -g omp -m -s /bin/bash omp \
+    && mkdir -p /home/omp/.omp /opt/nimay-omp-bridge \
+    && chown -R omp:omp /home/omp /opt/nimay-omp-bridge
+
+# Kopier bridge-filer
+COPY --chown=omp:omp payload/bridge/omp-bridge.mjs /opt/nimay-omp-bridge/
+COPY payload/bridge/config.template.json /opt/nimay-omp-bridge/
+COPY scripts/configure.sh /opt/nimay-omp-bridge/scripts/
+COPY scripts/write-omp-bin.sh /opt/nimay-omp-bridge/scripts/
+COPY payload/tools /opt/nimay-omp-bridge/tools
+COPY payload/voice /opt/nimay-omp-bridge/voice
+COPY payload/nimay-omp-bridge.service /opt/nimay-omp-bridge/
+
+# Sett rettigheter
+RUN chown -R omp:omp /opt/nimay-omp-bridge /home/omp
+
+# Pek broen pa riktig omp-binary. Uten denne fila faller broen tilbake
+# pa ~/.bun/bin/omp.exe, som er en Windows-sti og aldri finnes i
+# containeren. Da feiler alle spawn-kall med ENOENT.
+RUN /opt/nimay-omp-bridge/scripts/write-omp-bin.sh /opt/nimay-omp-bridge || \
+    echo "ADVARSEL: fant ingen omp i containeren"
+
+# Bruk omp-bruker
+USER omp
+WORKDIR /opt/nimay-omp-bridge
+
+# Sett miljøvariabler
+ENV HOME=/home/omp
+ENV PATH=/home/omp/.local/bin:/home/omp/.bun/bin:/usr/local/bin:/usr/bin:/bin
+
+# Port
+EXPOSE 7802
+
+# Start bridge
+CMD ["node", "/opt/nimay-omp-bridge/omp-bridge.mjs"]

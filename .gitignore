@@ -20,10 +20,31 @@ bridge/bridge.pid
 bridge/bridge.log
 bridge/bridge.err
 bridge/install-verify.log
+bridge/bridge.stdout.log
+bridge/bridge.stderr.log
+
+# Bridge installer runtime state
+bridge-installer/bridge/config.json
+bridge-installer/bridge/bridge.pid
+bridge-installer/bridge/bridge.stdout.log
+bridge-installer/bridge/bridge.stderr.log
+
+# Linux bridge build artifacts
+linux-bridge/*.deb
+linux-bridge/*.rpm
+linux-bridge/packaging/deb/*.deb
+linux-bridge/packaging/deb/nimay-omp-bridge_*.deb
+linux-bridge/packaging/rpm/*.rpm
+linux-bridge/payload/nimay-omp-bridge.service
+
+# Release archive (built artifacts, not source)
+releases/
 
 # Pairing QR (encodes bearer token)
 omp_chat_qr.png
 omp_chat_qr*.png
+linux-bridge/omp_chat_qr*.png
+bridge-installer/omp_chat_qr*.png
 
 # Database files
 *.db

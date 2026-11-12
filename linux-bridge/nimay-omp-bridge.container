@@ -1,0 +1,36 @@
+[Unit]
+Description=Nimay OMP Bridge
+Documentation=https://chat.nimay.net/nimayopp/
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=ghcr.io/nimay/omp-bridge:latest
+# Eller bygg lokalt: Image=nimay-omp-bridge:latest
+# Bygg med: podman build -t nimay-omp-bridge:latest -f Containerfile .
+
+# Kjør som bruker (ikke root) for tilgang til ~/.omp og omp i PATH
+User=<BRUKER>
+Group=<BRUKER>
+
+# Miljøvariabler for OMP-bruker
+Environment=HOME=/home/<BRUKER>
+Environment=PATH=/home/<BRUKER>/.local/bin:/home/<BRUKER>/.bun/bin:/usr/local/bin:/usr/bin:/bin
+
+# Filsystemtilgang for OMP-sesjoner og konfig
+Volume=/home/<BRUKER>/.omp:/home/omp/.omp:Z
+Volume=/opt/nimay-omp-bridge:/opt/nimay-omp-bridge:Z
+
+# Nettverk: host-modus for enkel pairing (eller port mapping under)
+Network=host
+# Eller port mapping: PublishPort=7802:7802
+
+# Automatisk oppdatering
+AutoUpdate=registry
+
+[Install]
+WantedBy=multi-user.target
+
+[Service]
+Restart=always
+RestartSec=3

@@ -56,6 +56,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -123,6 +124,7 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
     val scheme = MaterialTheme.colorScheme
     val clipboard = LocalClipboardManager.current
+    val ctx = LocalContext.current
     var modelOpen by remember { mutableStateOf(false) }
     var log by remember { mutableStateOf("") }
     var logOpen by remember { mutableStateOf(false) }
@@ -395,19 +397,62 @@ fun SettingsScreen(
                     Column(Modifier.weight(1f)) {
                         Text("Oppdateringer", style = MaterialTheme.typography.bodyMedium, color = scheme.onSurface)
                         Text(
-                            "Installert: 2.9.8",
+                            updateInfo?.let { "Nyeste: ${it.androidVersion} (kode ${it.androidVersionCode})" }
+                                ?: "Installert: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
                             style = MaterialTheme.typography.labelSmall,
-                            color = scheme.onSurfaceVariant
+                            color = scheme.onSurface
                         )
                     }
-                    TextButton(onClick = {
-                        scope.launch {
-                            val info = withContext(Dispatchers.IO) { com.omp.chat.data.UpdateChecker.fetch() }
-                            updateInfo = info
-                            updateStatus = if (info == null) "Kunne ikke hente oppdateringer" else "Nyeste: ${info.androidVersion} (kode ${info.androidVersionCode})"
-                            showUpdate = true
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = {
+                            scope.launch {
+                                val info = withContext(Dispatchers.IO) {
+                                    com.omp.chat.data.UpdateChecker.fetch(ctx)
+                                }
+                                updateInfo = info
+                                if (info == null) {
+                                    updateStatus = "Kunne ikke hente oppdateringer"
+                                } else if (info.error.isNotBlank()) {
+                                    updateStatus = "Kunne ikke hente oppdateringer: ${info.error}"
+                                } else if (info.available) {
+                                    updateStatus = "Ny versjon ${info.androidVersion} tilgjengelig"
+                                } else {
+                                    updateStatus = "Du har nyeste versjon"
+                                }
+                                showUpdate = true
+                            }
+                        }) { Text("Se etter oppdateringer", color = VariantColors.accent) }
+                        val currentInfo = updateInfo
+                        if (currentInfo?.available == true && currentInfo.androidUrl.isNotBlank()) {
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        updateStatus = "Laster ned oppdatering…"
+                                        val file = withContext(Dispatchers.IO) {
+                                            com.omp.chat.data.UpdateChecker.downloadApk(ctx, currentInfo!!.androidUrl)
+                                        }
+                                        if (file != null) {
+                                            com.omp.chat.data.UpdateChecker.installApk(ctx, file)
+                                        } else {
+                                            updateStatus = "Nedlasting mislyktes"
+                                        }
+                                    }
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Installer", style = MaterialTheme.typography.labelMedium)
+                            }
                         }
-                    }) { Text("Se etter oppdateringer", color = VariantColors.accent) }
+                    }
+                    if (updateStatus.isNotBlank()) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            updateStatus,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = scheme.onSurface
+                        )
+                    }
                 }
                 HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.6f))
                 HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.6f))
@@ -433,317 +478,164 @@ fun SettingsScreen(
             }
 
             if (com.omp.chat.data.FeatureFlags.VoiceEnabled) {
-                            // --------------------------------------------------------- tale og lyd
-                            SectionLabel(strings.taleOgLyd, Modifier.padding(top = 10.dp))
-                            SettingsCard {
-                                Column {
-                                    // STT-motor
-                                    Text(
-                                        strings.sttSeksjon,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = scheme.onSurfaceVariant
-                                    )
-                                    Text(
-                                        strings.sttBeskrivelse,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = scheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(bottom = 8.dp)
-                                    )
-                                    val sttEngineObj = state.voiceEngines?.sttEngines?.firstOrNull { it.id == settings.sttEngine }
-                                    val sttName = sttEngineObj?.name?.ifBlank { settings.sttEngine }
-                                        ?: settings.sttEngine.ifBlank { "Ikke valgt" }
-                                    val sttInstalled = sttEngineObj?.installed == true
-                                    Row(
-                                        Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Column(Modifier.weight(1f)) {
-                                            Text(
-                                                strings.velgSttMotor,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = scheme.onSurface
-                                            )
-                                            Text(
-                                                "$sttName (${if (sttInstalled) strings.motorInstallert else strings.motorMangler})",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = if (sttInstalled) scheme.primary else scheme.onSurfaceVariant
-                                            )
-                                        }
-                                        OutlinedButton(
-                                            onClick = {
-                                                sttPickerOpen = true
-                                                if (state.voiceEngines == null) onLoadVoiceEngines()
-                                            },
-                                            shape = RoundedCornerShape(12.dp)
-                                        ) {
-                                            Text(strings.velgSttMotor, style = MaterialTheme.typography.labelMedium)
-                                        }
-                                    }
-                                    HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.6f))
-
-                                    // TTS-motor
-                                    Text(
-                                        strings.ttsSeksjon,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = scheme.onSurfaceVariant
-                                    )
-                                    Text(
-                                        strings.ttsBeskrivelse,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = scheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(bottom = 8.dp)
-                                    )
-                                    val ttsEngineObj = state.voiceEngines?.ttsEngines?.firstOrNull { it.id == settings.ttsEngine }
-                                    val ttsName = ttsEngineObj?.name?.ifBlank { settings.ttsEngine }
-                                        ?: settings.ttsEngine.ifBlank { "Ikke valgt" }
-                                    val ttsInstalled = ttsEngineObj?.installed == true
-                                    Row(
-                                        Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Column(Modifier.weight(1f)) {
-                                            Text(
-                                                strings.velgTtsMotor,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = scheme.onSurface
-                                            )
-                                            val voicesList = ttsEngineObj?.voices.orEmpty()
-                                            val activeVoice = state.voiceEngines?.ttsVoice?.takeIf { it.isNotBlank() }
-                                                ?: ttsEngineObj?.voice?.takeIf { it.isNotBlank() }
-                                            val voiceLabel = if (voicesList.isEmpty()) {
-                                                activeVoice
-                                            } else {
-                                                activeVoice?.let { v -> voicesList.firstOrNull { ve -> ve.id == v }?.name ?: v }
-                                            }
-                                            val status = if (ttsInstalled) strings.motorInstallert else strings.motorMangler
-                                            Text(
-                                                voiceLabel?.let { "$ttsName · $it ($status)" } ?: "$ttsName ($status)",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = if (ttsInstalled) scheme.primary else scheme.onSurfaceVariant
-                                            )
-                                        }
-                                        OutlinedButton(
-                                            onClick = {
-                                                ttsPickerOpen = true
-                                                if (state.voiceEngines == null) onLoadVoiceEngines()
-                                            },
-                                            shape = RoundedCornerShape(12.dp)
-                                        ) {
-                                            Text(strings.velgTtsMotor, style = MaterialTheme.typography.labelMedium)
-                                        }
-                                    }
-                                    HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.6f))
-
-                                    // Samtaleinnstillinger
-                                    Text(
-                                        strings.samtaleSeksjon,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = scheme.onSurfaceVariant
-                                    )
-                                    Spacer(Modifier.height(8.dp))
-                                    SwitchRow(strings.automatiskLytning, strings.automatiskLytningBeskrivelse, settings.voiceAutoListen, onVoiceAutoListen)
-                                    HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.6f))
-                                    SwitchRow(strings.avbrytAiTale, strings.avbrytAiTaleBeskrivelse, settings.voiceBargeIn, onVoiceBargeIn)
-                                    HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.6f))
-                                    Column(Modifier.padding(vertical = 6.dp)) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(
-                                                strings.talehastighet,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = scheme.onSurface,
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                            Text(
-                                                "${(settings.voiceSpeed * 100).toInt()} %",
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = scheme.onSurfaceVariant
-                                            )
-                                        }
-                                        Slider(
-                                            value = settings.voiceSpeed,
-                                            onValueChange = onVoiceSpeed,
-                                            valueRange = 0.5f..2.0f,
-                                            steps = 15
-                                        )
-                                    }
-                                    HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.6f))
-                                    Spacer(Modifier.height(6.dp))
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Button(
-                                            onClick = onTestVoice,
-                                            shape = RoundedCornerShape(12.dp),
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            Text(strings.testStemme, style = MaterialTheme.typography.labelMedium)
-                                        }
-                                        OutlinedButton(
-                                            onClick = onLoadVoiceEngines,
-                                            shape = RoundedCornerShape(12.dp)
-                                        ) {
-                                            Text(
-                                                strings.installert,
-                                                style = MaterialTheme.typography.labelMedium
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-            }
-            if (sttPickerOpen && state.voiceEngines != null) {
-                AlertDialog(
-                    onDismissRequest = { sttPickerOpen = false },
-                    title = { Text(strings.velgSttMotor) },
-                    confirmButton = {
-                        TextButton(onClick = { sttPickerOpen = false }) { Text(strings.close) }
-                    },
-                    dismissButton = null,
-                    text = {
-                        Column(Modifier.width(240.dp)) {
-                            state.voiceEngines!!.sttEngines.forEach { engine ->
-                                val selected = engine.id == settings.sttEngine
-                                Row(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            onSttEngine(engine.id)
-                                            sttPickerOpen = false
-                                        }
-                                        .padding(vertical = 8.dp, horizontal = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if (selected) {
-                                        Icon(
-                                            OmpIcons.Done,
-                                            contentDescription = null,
-                                            tint = scheme.primary,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                    Spacer(Modifier.width(8.dp))
-                                    Column(Modifier.weight(1f)) {
-                                        Text(
-                                            engine.name,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = if (selected) scheme.primary else scheme.onSurface
-                                        )
-                                        Text(
-                                            if (engine.installed) strings.motorInstallert else strings.motorMangler,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = scheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                )
-            }
-
-            if (ttsPickerOpen && state.voiceEngines != null) {
-                AlertDialog(
-                    onDismissRequest = { ttsPickerOpen = false },
-                    title = { Text(strings.velgTtsMotor) },
-                    confirmButton = {
-                        TextButton(onClick = { ttsPickerOpen = false }) { Text(strings.close) }
-                    },
-                    dismissButton = null,
-                    text = {
-                        Column(Modifier.width(260.dp)) {
-                            state.voiceEngines!!.ttsEngines.forEach { engine ->
-                                val selected = engine.id == settings.ttsEngine
-                                Row(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .clickable(enabled = engine.installed) {
-                                            onTtsEngine(engine.id)
-                                        }
-                                        .padding(vertical = 8.dp, horizontal = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if (selected) {
-                                        Icon(
-                                            OmpIcons.Done,
-                                            contentDescription = null,
-                                            tint = scheme.primary,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                    Spacer(Modifier.width(8.dp))
-                                    Column(Modifier.weight(1f)) {
-                                        Text(
-                                            engine.name,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = if (selected) scheme.primary else scheme.onSurface
-                                        )
-                                        Text(
-                                            "${if (engine.installed) strings.motorInstallert else strings.motorMangler} · ${engine.downloadMB} MB",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = scheme.onSurfaceVariant
-                                        )
-                                    }
-                                    if (!engine.installed) {
-                                        Text(
-                                            strings.installer,
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = scheme.primary,
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .clickable { onInstallVoiceEngine("tts", engine.id) }
-                                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                                        )
-                                    }
-                                }
-                            }
-
-                            val currentEngine = state.voiceEngines!!.ttsEngines
-                                .firstOrNull { it.id == settings.ttsEngine }
-                            if (currentEngine != null && currentEngine.voices.isNotEmpty()) {
-                                HorizontalDivider(
-                                    color = scheme.outlineVariant.copy(alpha = 0.6f),
-                                    modifier = Modifier.padding(vertical = 8.dp)
+                // --------------------------------------------------------- tale og lyd
+                SectionLabel(strings.taleOgLyd, Modifier.padding(top = 10.dp))
+                SettingsCard {
+                    Column {
+                        // STT-motor
+                        Text(
+                            strings.sttSeksjon,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = scheme.onSurfaceVariant
+                        )
+                        Text(
+                            strings.sttBeskrivelse,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = scheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        val sttEngineObj = state.voiceEngines?.sttEngines?.firstOrNull { it.id == settings.sttEngine }
+                        val sttName = sttEngineObj?.name?.ifBlank { settings.sttEngine }
+                            ?: settings.sttEngine.ifBlank { "Ikke valgt" }
+                        val sttInstalled = sttEngineObj?.installed == true
+                        Row(
+                            Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    strings.velgSttMotor,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = scheme.onSurface
                                 )
                                 Text(
-                                    strings.stemmer,
+                                    "$sttName (${if (sttInstalled) strings.motorInstallert else strings.motorMangler})",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (sttInstalled) scheme.primary else scheme.onSurfaceVariant
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    sttPickerOpen = true
+                                    if (state.voiceEngines == null) onLoadVoiceEngines()
+                                },
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(strings.velgSttMotor, style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                        HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.6f))
+
+                        // TTS-motor
+                        Text(
+                            strings.ttsSeksjon,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = scheme.onSurfaceVariant
+                        )
+                        Text(
+                            strings.ttsBeskrivelse,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = scheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        val ttsEngineObj = state.voiceEngines?.ttsEngines?.firstOrNull { it.id == settings.ttsEngine }
+                        val ttsName = ttsEngineObj?.name?.ifBlank { settings.ttsEngine }
+                            ?: settings.ttsEngine.ifBlank { "Ikke valgt" }
+                        val ttsInstalled = ttsEngineObj?.installed == true
+                        Row(
+                            Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    strings.velgTtsMotor,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = scheme.onSurface
+                                )
+                                val voicesList = ttsEngineObj?.voices.orEmpty()
+                                val activeVoice = state.voiceEngines?.ttsVoice?.takeIf { it.isNotBlank() }
+                                    ?: ttsEngineObj?.voice?.takeIf { it.isNotBlank() }
+                                val voiceLabel = if (voicesList.isEmpty()) {
+                                    activeVoice
+                                } else {
+                                    activeVoice?.let { v -> voicesList.firstOrNull { ve -> ve.id == v }?.name ?: v }
+                                }
+                                val status = if (ttsInstalled) strings.motorInstallert else strings.motorMangler
+                                Text(
+                                    voiceLabel?.let { "$ttsName · $it ($status)" } ?: "$ttsName ($status)",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (ttsInstalled) scheme.primary else scheme.onSurfaceVariant
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    ttsPickerOpen = true
+                                    if (state.voiceEngines == null) onLoadVoiceEngines()
+                                },
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(strings.velgTtsMotor, style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                        HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.6f))
+
+                        // Samtaleinnstillinger
+                        Text(
+                            strings.samtaleSeksjon,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = scheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        SwitchRow(strings.automatiskLytning, strings.automatiskLytningBeskrivelse, settings.voiceAutoListen, onVoiceAutoListen)
+                        HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.6f))
+                        SwitchRow(strings.avbrytAiTale, strings.avbrytAiTaleBeskrivelse, settings.voiceBargeIn, onVoiceBargeIn)
+                        HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.6f))
+                        Column(Modifier.padding(vertical = 6.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    strings.talehastighet,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = scheme.onSurface,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Text(
+                                    "${(settings.voiceSpeed * 100).toInt()} %",
                                     style = MaterialTheme.typography.labelMedium,
                                     color = scheme.onSurfaceVariant
                                 )
-                                Spacer(Modifier.height(4.dp))
-                                val activeVoice = state.voiceEngines?.ttsVoice?.takeIf { it.isNotBlank() }
-                                    ?: (currentEngine.voice.takeIf { it.isNotBlank() } ?: currentEngine.voices.first().id)
-                                currentEngine.voices.forEach { voiceEntry ->
-                                    val selected = voiceEntry.id == activeVoice
-                                    Row(
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                onTtsVoice(currentEngine.id, voiceEntry.id)
-                                            }
-                                            .padding(vertical = 6.dp, horizontal = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        if (selected) {
-                                            Icon(
-                                                OmpIcons.Done,
-                                                contentDescription = null,
-                                                tint = scheme.primary,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(
-                                            voiceEntry.name,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = if (selected) scheme.primary else scheme.onSurface
-                                        )
-                                    }
-                                }
+                            }
+                            Slider(
+                                value = settings.voiceSpeed,
+                                onValueChange = onVoiceSpeed,
+                                valueRange = 0.5f..2.0f,
+                                steps = 15
+                            )
+                        }
+                        HorizontalDivider(color = scheme.outlineVariant.copy(alpha = 0.6f))
+                        Spacer(Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = onTestVoice,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(strings.testStemme, style = MaterialTheme.typography.labelMedium)
+                            }
+                            OutlinedButton(
+                                onClick = onLoadVoiceEngines,
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text(
+                                    strings.installert,
+                                    style = MaterialTheme.typography.labelMedium
+                                )
                             }
                         }
                     }
-                )
+                }
+
             }
 
             // ------------------------------------------------------ diagnostics
@@ -820,16 +712,16 @@ fun SettingsScreen(
                     modifier = Modifier.padding(vertical = 8.dp)
                 )
             }
-        }
-    }
 
-    if (modelOpen) {
-        ModelSheet(
-            models = state.models,
-            current = state.chat.model,
-            onSelect = onModel,
-            onDismiss = { modelOpen = false }
-        )
+            if (modelOpen) {
+                ModelSheet(
+                    models = state.models,
+                    current = state.chat.model,
+                    onSelect = onModel,
+                    onDismiss = { modelOpen = false }
+                )
+            }
+        }
     }
 }
 

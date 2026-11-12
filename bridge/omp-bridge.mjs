@@ -23,7 +23,7 @@ import crypto from "node:crypto";
 import { spawn, exec, execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const VERSION = "2.9.24";
+const VERSION = "2.9.25";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 // Resource monitoring state
@@ -152,8 +152,9 @@ const OMP_BIN = (() => {
   try {
     if (fs.existsSync(bunShim)) return bunShim;
   } catch { /* ignore */ }
-  // 6. Last resort
-  return bunShim;
+  // 6. Last resort: let the OS resolve "omp" via system PATH instead of a
+  // hardcoded, version-specific file that may not exist after an update.
+  return "omp";
 })();
 // If OMP_BIN is "exe|entry", split it
 const _ompBinParts = OMP_BIN.includes("|") ? OMP_BIN.split("|") : [OMP_BIN, null];
@@ -2670,6 +2671,7 @@ async function handle(req, res) {
             attempts++;
           }
         }
+        const session = file ? loadSession(file) : null;
         // Auto-assign projectId based on cwd matching registered project paths
         if (file) {
           try {
@@ -2677,9 +2679,9 @@ async function handle(req, res) {
             const normCwd = IS_WINDOWS ? cwd.toLowerCase() : cwd;
             const proj = list.find((p) => (IS_WINDOWS ? p.path.toLowerCase() : p.path) === normCwd);
             if (proj && session.projectId !== proj.id) {
-              const resp = await fetch("http://127.0.0.1:" + port + "/api/projects/move-session", {
+              const resp = await fetch("http://127.0.0.1:" + CONFIG.port + "/api/projects/move-session", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", "Authorization": "Bearer " + CONFIG.token },
                 body: JSON.stringify({ file, projectId: proj.id }),
               });
               if (resp.ok && session) {

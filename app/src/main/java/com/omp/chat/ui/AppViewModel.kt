@@ -120,7 +120,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             while (true) {
                 kotlinx.coroutines.delay(6 * 60 * 60 * 1000L)
-                com.omp.chat.data.UpdateChecker.fetch()?.let { info ->
+                com.omp.chat.data.UpdateChecker.fetch(application)?.let { info ->
                     if (info.androidVersionCode > 0) {
                         // notify via toast if newer (simple check: version name differs)
                         _toast.value = "Ny versjon tilgjengelig: ${info.androidVersion}"
