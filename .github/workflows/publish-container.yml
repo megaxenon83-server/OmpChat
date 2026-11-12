@@ -52,11 +52,21 @@ jobs:
       - name: Publiser image
         env:
           REGISTRY: ghcr.io
+          # GITHUB_TOKEN maa vaere eksplisitt tilgjengelig. Uten
+          # packages: write i workflow-permissjonene blir tokenet tomt,
+          # og podman faller tilbake til aa lese passord fra terminalen.
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # podman login --password-stdin feiler i Actions-miljoet
-          # ("inappropriate ioctl for device"), saa --creds brukes
-          # direkte pa push i stedet.
-          CREDS="${GITHUB_ACTOR}:${GITHUB_TOKEN}"
+          if [ -z "${GHCR_TOKEN}" ]; then
+            echo "ERROR: GITHUB_TOKEN er tomt. Sjekk packages: write i workflow-permissjonene." >&2
+            exit 1
+          fi
+          echo "Token lengde: ${#GHCR_TOKEN}"
+
+          # podman vil ha et TTY for passord i Actions-miljoet
+          # ("inappropriate ioctl for device"), saa --creds brukes direkte.
+          # Runneren er engangs, saa dette er trygt.
+          CREDS="${GITHUB_ACTOR}:${GHCR_TOKEN}"
 
           podman push --creds "${CREDS}" "${GHCR_IMAGE}:latest"
 
