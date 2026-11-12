@@ -4,9 +4,9 @@
 
 ```bash
 # Last ned og installer i ett steg
-sudo dpkg -i nimay-omp-bridge_1.0.0_amd64.deb
+sudo dpkg -i nimay-omp-bridge_1.0.1_amd64.deb
 # eller
-sudo apt install ./nimay-omp-bridge_1.0.0_amd64.deb
+sudo apt install ./nimay-omp-bridge_1.0.1_amd64.deb
 ```
 
 Dette:

@@ -23,7 +23,7 @@ import crypto from "node:crypto";
 import { spawn, exec, execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const VERSION = "2.9.25";
+const VERSION = "2.9.26";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 // Resource monitoring state

@@ -4,9 +4,9 @@
 
 ```bash
 # Fedora / RHEL 9+ / AlmaLinux / Rocky Linux
-sudo dnf install ./nimay-omp-bridge-1.0.0-1.noarch.rpm
+sudo dnf install ./nimay-omp-bridge-1.0.1-1.noarch.rpm
 # eller
-sudo rpm -Uvh --nodeps nimay-omp-bridge-1.0.0-1.noarch.rpm
+sudo rpm -Uvh --nodeps nimay-omp-bridge-1.0.1-1.noarch.rpm
 ```
 
 > Bruk `dnf install ./...rpm` (anbefalt): den loeser avhengigheter som
@@ -26,7 +26,7 @@ Dette:
 
 ```bash
 # Installer via rpm-ostree (layer i ostree)
-rpm-ostree install ./nimay-omp-bridge-1.0.0-1.noarch.rpm
+rpm-ostree install ./nimay-omp-bridge-1.0.1-1.noarch.rpm
 systemctl reboot
 ```
 - Installeres som layer i ostree → overlever `rpm-ostree upgrade`
@@ -156,7 +156,7 @@ systemctl daemon-reload
 
 | Problem | Løsning |
 |---------|---------|
-| `rpm -Uvh` sier "nodejs >= 18 is needed" | Bruk `sudo dnf install ./nimay-omp-bridge-1.0.0-1.noarch.rpm` i stedet - den loeser avhengigheten automatisk. |
+| `rpm -Uvh` sier "nodejs >= 18 is needed" | Bruk `sudo dnf install ./nimay-omp-bridge-1.0.1-1.noarch.rpm` i stedet - den loeser avhengigheten automatisk. |
 | Tjeneste starter ikke | `journalctl -u nimay-omp-bridge -f` |
 | Port 7802 allerede i bruk | `ss -tlnp | grep 7802` → stopp prosessen |
 | Ingen token i config | `cat /opt/nimay-omp-bridge/token` |

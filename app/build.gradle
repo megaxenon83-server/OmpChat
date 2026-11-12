@@ -35,8 +35,8 @@ android {
         chstgpt {
             dimension "ui"
             applicationIdSuffix ".chstgpt"
-            versionCode 142
-            versionName "3.0.42-chatgpt-inspired"
+            versionCode 143
+            versionName "3.0.43-chatgpt-inspired"
         }
     }
 
