@@ -35,16 +35,19 @@ jobs:
 
       - name: Bygg image
         working-directory: linux-bridge
+        env:
+          # GHCR krever lowercase i pakkenavnet, mens repoet kan ha stor O.
+          IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}/omp-bridge
         run: |
           podman build \
-            --tag "ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}/omp-bridge:latest" \
+            --tag "${IMAGE_NAME}:latest" \
             --file Containerfile \
             .
 
       - name: Publiser image
         env:
           REGISTRY: ghcr.io
-          IMAGE_NAME: ${{ github.repository_owner }}/${{ github.event.repository.name }}/omp-bridge
+          IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}/omp-bridge
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | podman login "$REGISTRY" \
             --username "${{ github.actor }}" \
