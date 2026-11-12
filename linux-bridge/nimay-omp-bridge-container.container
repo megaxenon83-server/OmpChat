@@ -28,8 +28,10 @@ Environment=PATH=/home/omp/.local/bin:/home/omp/.bun/bin:/usr/local/bin:/usr/bin
 # Filsystemtilgang for OMP-sesjoner og konfig.
 #
 # ~/.omp maa vaere eid av UID 1000, ellers kan ikke broen skrive
-# agent-databasen der. Se INSTALL_QUADLET.md for oppsettet.
-Volume=/home/<BRUKER>/.omp:/home/omp/.omp:Z
+# agent-databasen der. Stien maa ogsa vaere tilgjengelig for UID 1000,
+# saa den legges i /var/lib framfor i /home/<bruker>, som ofte er eid
+# av root uten traverse-rettighet.
+Volume=<OMP_STATE>:/home/omp/.omp:Z
 Volume=/opt/nimay-omp-bridge:/opt/nimay-omp-bridge:Z
 
 # Nettverk: host-modus for enkel pairing (eller port mapping under)

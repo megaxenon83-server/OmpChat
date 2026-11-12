@@ -72,8 +72,12 @@ if [[ "$USE_CONTAINER" == "true" ]]; then
   fi
 
   CONTAINER_DIR="/etc/containers/systemd"
+  # Quadlet-enheten maa ha et eget navn. Ellers bruker systemd den gamle
+  # native enheten, som kjoerer node mot /opt/nimay-omp-bridge - en
+  # container-mount, ikke en mappe med node-filer.
+  UNIT_NAME="nimay-omp-bridge-container"
   mkdir -p "$CONTAINER_DIR"
-  cp "$HERE/nimay-omp-bridge.container" "$CONTAINER_DIR/"
+  cp "$HERE/nimay-omp-bridge-container.container" "$CONTAINER_DIR/"
 
   # Brukernavn bestemmes av configure.sh, slik at native og container
   # installasjon velger samme bruker.
@@ -81,33 +85,58 @@ if [[ "$USE_CONTAINER" == "true" ]]; then
   if [[ -z "$CONTAINER_USER" ]]; then
     CONTAINER_USER="${SUDO_USER:-$(awk -F: '$3>=1000 && $3<65534 && $7 !~ /(nologin|false)/ {print $1; exit}' /etc/passwd)}"
   fi
-  sed -i "s|<BRUKER>|$CONTAINER_USER|g" "$CONTAINER_DIR/nimay-omp-bridge.container"
+  sed -i "s|<BRUKER>|$CONTAINER_USER|g" "$CONTAINER_DIR/$UNIT_NAME.container"
+  # Bind-mounten for ~/.omp ligger i /var/lib, ikke i brukerens home.
+  sed -i "s|<OMP_STATE>|$OMP_STATE_DIR|g" "$CONTAINER_DIR/$UNIT_NAME.container"
+
+  # /opt/nimay-omp-bridge mountes inn i containeren, og podman krever at
+  # mappen finnes pa verten. Uten den feiler tjenesten med
+  # "statfs /opt/nimay-omp-bridge: no such file or directory".
+  mkdir -p "$INSTALL_DIR"
+  chown -R 1000:1000 "$INSTALL_DIR" 2>/dev/null || true
 
   # ~/.omp maa vaere eid av UID 1000, ellers kan ikke broen skrive
   # agent-databasen der (EACCES ved mkdir).
+  #
+  # Stien maa ogsa vaere tilgjengelig for UID 1000. /home/<bruker> er ofte
+  # eid av root uten traverse-rettighet, saa bind-mounten legges i /var/lib
+  # der alle kan naa.
   CONTAINER_HOME="$(getent passwd "$CONTAINER_USER" | cut -d: -f6)"
-  mkdir -p "$CONTAINER_HOME/.omp"
-  chown -R 1000:1000 "$CONTAINER_HOME/.omp"
-  echo "[info] ~/.omp eies av UID 1000 for container-tilgang"
+  OMP_STATE_DIR="/var/lib/nimay-omp-bridge/omp"
+  mkdir -p "$OMP_STATE_DIR"
+  if [[ -d "$CONTAINER_HOME/.omp" ]]; then
+    cp -a "$CONTAINER_HOME/.omp/." "$OMP_STATE_DIR/" 2>/dev/null || true
+  fi
+  chown -R 1000:1000 "$OMP_STATE_DIR"
+  echo "[info] tilstand: $OMP_STATE_DIR (eies av UID 1000)"
 
-  # Advar om portkonflikt. Den native tjenesten holder port 7802, og
-  # containeren kan ikke starte mens den kjører.
+  # Den native tjenesten holder port 7802, og containeren kan ikke starte
+  # mens den kjører. Den maskes ogsa bort, slik at den ikke kolliderer
+  # med Quadlet-enheten.
   if systemctl is-active --quiet nimay-omp-bridge 2>/dev/null; then
     echo "[info] stopper den native tjenesten (den holder port 7802)"
-    systemctl stop nimay-omp-bridge
+    systemctl stop nimay-omp-bridge 2>/dev/null || true
+  fi
+  if systemctl list-unit-files 2>/dev/null | grep -q "^nimay-omp-bridge.service"; then
+    systemctl mask nimay-omp-bridge 2>/dev/null || true
+    echo "[info] maskerer den native tjenesten (kolliderer med Quadlet-enheten)"
   fi
 
   systemctl daemon-reload
-  systemctl enable --now nimay-omp-bridge
+  # Quadlet-enheter er "transient or generated" og kan ikke enable's
+  # mens de allerede er generert. De startes med start/restart, og
+  # settes til a starte ved boot med enable.
+  systemctl enable "$UNIT_NAME" 2>/dev/null || true
+  systemctl restart "$UNIT_NAME" 2>/dev/null || systemctl start "$UNIT_NAME"
   echo
   echo "================ Nimay OMP Bridge (container) ================"
-  echo "  Tjeneste:      nimay-omp-bridge (systemctl status nimay-omp-bridge)"
-  echo "  Image:         nimay-omp-bridge:latest"
+  echo "  Tjeneste:      $UNIT_NAME (systemctl status $UNIT_NAME)"
+  echo "  Image:         ghcr.io/megaxenon83-server/ompchat/omp-bridge:latest"
   echo "  Bruker:        $CONTAINER_USER"
   echo "  Port:          7802"
   echo
   echo "  Token:"
-  podman exec nimay-omp-bridge node -e 'console.log(JSON.parse(require("fs").readFileSync("/opt/nimay-omp-bridge/config.json","utf8")).token)' 2>/dev/null | sed 's/^/    /'
+  podman exec "$UNIT_NAME" node -e 'console.log(JSON.parse(require("fs").readFileSync("/opt/nimay-omp-bridge/config.json","utf8")).token)' 2>/dev/null | sed 's/^/    /'
   echo "==============================================================="
   exit 0
 fi
