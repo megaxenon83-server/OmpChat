@@ -23,6 +23,7 @@ Group=1000
 # Miljøvariabler for OMP-bruker
 Environment=HOME=/home/omp
 Environment=OMP_HOME=/home/omp/.omp
+Environment=OMP_CONFIG_DIR=/opt/nimay-omp-bridge/config
 Environment=PATH=/home/omp/.local/bin:/home/omp/.bun/bin:/usr/local/bin:/usr/bin:/bin
 
 # Filsystemtilgang for OMP-sesjoner og konfig.
@@ -32,6 +33,11 @@ Environment=PATH=/home/omp/.local/bin:/home/omp/.bun/bin:/usr/local/bin:/usr/bin
 # saa den legges i /var/lib framfor i /home/<bruker>, som ofte er eid
 # av root uten traverse-rettighet.
 Volume=<OMP_STATE>:/home/omp/.omp:Z
+
+# Config-mappen (config.json med token og port) mountes fra verten, saa
+# tokenet overlever omstarter. Maa vaere en egen mappe under
+# /opt/nimay-omp-bridge, siden broen leser config.json derfra.
+Volume=<CONFIG_DIR>:/opt/nimay-omp-bridge/config:Z
 
 # Brukerens hjemmekatalog mountes inn, slik at broen finner
 # prosjektmapper a jobbe i.

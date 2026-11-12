@@ -89,6 +89,7 @@ if [[ "$USE_CONTAINER" == "true" ]]; then
   # Bind-mounten for ~/.omp ligger i /var/lib, ikke i brukerens home.
   sed -i "s|<OMP_STATE>|$OMP_STATE_DIR|g" "$CONTAINER_DIR/$UNIT_NAME.container"
   sed -i "s|<USER_HOME>|$CONTAINER_HOME|g" "$CONTAINER_DIR/$UNIT_NAME.container"
+  sed -i "s|<CONFIG_DIR>|$CONFIG_DIR|g" "$CONTAINER_DIR/$UNIT_NAME.container"
 
   # /opt/nimay-omp-bridge mountes inn i containeren, og podman krever at
   # mappen finnes pa verten. Uten den feiler tjenesten med
@@ -110,6 +111,17 @@ if [[ "$USE_CONTAINER" == "true" ]]; then
   fi
   chown -R 1000:1000 "$OMP_STATE_DIR"
   echo "[info] tilstand: $OMP_STATE_DIR (eies av UID 1000)"
+
+  # Config-mappen pa verten. Tokenet ligger her, saa det overlever
+  # omstarter og paringen i appen gaar ikke tapt.
+  CONFIG_DIR="/var/lib/nimay-omp-bridge/config"
+  mkdir -p "$CONFIG_DIR"
+  if [ ! -f "$CONFIG_DIR/config.template.json" ]; then
+    podman run --rm --entrypoint cat ghcr.io/megaxenon83-server/ompchat/omp-bridge:latest \
+      /opt/nimay-omp-bridge/config.template.json > "$CONFIG_DIR/config.template.json" 2>/dev/null || true
+  fi
+  chown -R 1000:1000 "$CONFIG_DIR"
+  echo "[info] config: $CONFIG_DIR (tokenet overlever omstart)"
 
   # Den native tjenesten holder port 7802, og containeren kan ikke starte
   # mens den kjører. Den maskes ogsa bort, slik at den ikke kolliderer
