@@ -85,16 +85,9 @@ if [[ "$USE_CONTAINER" == "true" ]]; then
   if [[ -z "$CONTAINER_USER" ]]; then
     CONTAINER_USER="${SUDO_USER:-$(awk -F: '$3>=1000 && $3<65534 && $7 !~ /(nologin|false)/ {print $1; exit}' /etc/passwd)}"
   fi
-  sed -i "s|<BRUKER>|$CONTAINER_USER|g" "$CONTAINER_DIR/$UNIT_NAME.container"
-  # Bind-mounten for ~/.omp ligger i /var/lib, ikke i brukerens home.
-  sed -i "s|<OMP_STATE>|$OMP_STATE_DIR|g" "$CONTAINER_DIR/$UNIT_NAME.container"
-  sed -i "s|<USER_HOME>|$CONTAINER_HOME|g" "$CONTAINER_DIR/$UNIT_NAME.container"
-  sed -i "s|<CONFIG_DIR>|$CONFIG_DIR|g" "$CONTAINER_DIR/$UNIT_NAME.container"
-  # /opt/nimay-omp-bridge mountes inn i containeren, og podman krever at
-  # mappen finnes pa verten. Uten den feiler tjenesten med
-  # "statfs /opt/nimay-omp-bridge: no such file or directory".
-  mkdir -p "$INSTALL_DIR"
-  chown -R 1000:1000 "$INSTALL_DIR" 2>/dev/null || true
+  CONTAINER_HOME="$(getent passwd "$CONTAINER_USER" | cut -d: -f6)"
+  OMP_STATE_DIR="/var/lib/nimay-omp-bridge/omp"
+  CONFIG_DIR="/var/lib/nimay-omp-bridge/config"
 
   # ~/.omp maa vaere eid av UID 1000, ellers kan ikke broen skrive
   # agent-databasen der (EACCES ved mkdir).
@@ -102,8 +95,6 @@ if [[ "$USE_CONTAINER" == "true" ]]; then
   # Stien maa ogsa vaere tilgjengelig for UID 1000. /home/<bruker> er ofte
   # eid av root uten traverse-rettighet, saa bind-mounten legges i /var/lib
   # der alle kan naa.
-  CONTAINER_HOME="$(getent passwd "$CONTAINER_USER" | cut -d: -f6)"
-  OMP_STATE_DIR="/var/lib/nimay-omp-bridge/omp"
   mkdir -p "$OMP_STATE_DIR"
   if [[ -d "$CONTAINER_HOME/.omp" ]]; then
     cp -a "$CONTAINER_HOME/.omp/." "$OMP_STATE_DIR/" 2>/dev/null || true
@@ -113,7 +104,6 @@ if [[ "$USE_CONTAINER" == "true" ]]; then
 
   # Config-mappen pa verten. Tokenet ligger her, saa det overlever
   # omstarter og paringen i appen gaar ikke tapt.
-  CONFIG_DIR="/var/lib/nimay-omp-bridge/config"
   mkdir -p "$CONFIG_DIR"
   if [ ! -f "$CONFIG_DIR/config.template.json" ]; then
     podman run --rm --entrypoint cat ghcr.io/megaxenon83-server/ompchat/omp-bridge:latest \
@@ -125,6 +115,19 @@ if [[ "$USE_CONTAINER" == "true" ]]; then
   [ -f "$CONFIG_DIR/config.json" ] || : > "$CONFIG_DIR/config.json"
   chown -R 1000:1000 "$CONFIG_DIR"
   echo "[info] config: $CONFIG_DIR (tokenet overlever omstart)"
+
+  # Quadlet-enheten far alle stier. Skriv variabler FØR sed, ellers dør
+  # skriptet med "unbound variable" fordi set -u er paa.
+  sed -i "s|<BRUKER>|$CONTAINER_USER|g" "$CONTAINER_DIR/$UNIT_NAME.container"
+  sed -i "s|<OMP_STATE>|$OMP_STATE_DIR|g" "$CONTAINER_DIR/$UNIT_NAME.container"
+  sed -i "s|<USER_HOME>|$CONTAINER_HOME|g" "$CONTAINER_DIR/$UNIT_NAME.container"
+  sed -i "s|<CONFIG_DIR>|$CONFIG_DIR|g" "$CONTAINER_DIR/$UNIT_NAME.container"
+
+  # /opt/nimay-omp-bridge mountes inn i containeren, og podman krever at
+  # mappen finnes pa verten. Uten den feiler tjenesten med
+  # "statfs /opt/nimay-omp-bridge: no such file or directory".
+  mkdir -p "$INSTALL_DIR"
+  chown -R 1000:1000 "$INSTALL_DIR" 2>/dev/null || true
 
   # Den native tjenesten holder port 7802, og containeren kan ikke starte
   # mens den kjører. Den maskes ogsa bort, slik at den ikke kolliderer

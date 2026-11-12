@@ -71,9 +71,26 @@ fi
 echo "[info] service user: $USER_NAME ($USER_HOME), group: $USER_GROUP"
 
 # --- locate node --------------------------------------------------------------
+# Node maa vaere pa plass for at broen skal kunne starte. Hvis den mangler,
+# installeres den her. Det er nodvendig for RPM-installasjonen, der
+# configure.sh kjoeres fra %post og ingen annen installasjon har kjort.
 NODE_BIN="$(command -v node || true)"
 if [[ -z "$NODE_BIN" ]]; then
-  echo "ERROR: node not found in PATH; install Node.js >= 18 first" >&2
+  echo "[info] node mangler - prøver å installere Node.js 20..."
+  if command -v dnf >/dev/null 2>&1; then
+    dnf install -y nodejs >/dev/null 2>&1 || true
+  elif command -v apt-get >/dev/null 2>&1; then
+    apt-get install -y nodejs >/dev/null 2>&1 || true
+  elif command -v zypper >/dev/null 2>&1; then
+    zypper --non-interactive install nodejs >/dev/null 2>&1 || true
+  fi
+  NODE_BIN="$(command -v node || true)"
+fi
+if [[ -z "$NODE_BIN" ]]; then
+  echo "ERROR: node ble ikke funnet, og kunne ikke installeres." >&2
+  echo "       Installer Node.js >= 18 og kjør denne skriptet på nytt:" >&2
+  echo "         sudo dnf install nodejs   # Fedora" >&2
+  echo "         sudo apt install nodejs   # Debian/Ubuntu" >&2
   exit 1
 fi
 NODE_MAJOR="$("$NODE_BIN" -e 'console.log(process.versions.node.split(".")[0])')"
@@ -120,11 +137,16 @@ chmod 644 "$INSTALL_DIR/omp-bridge.mjs"
 if [[ -x "$INSTALL_DIR/scripts/write-omp-bin.sh" ]]; then
     # SERVICE_HOME settes til tjenestebrukerens home, slik at skriptet
     # vet hvor omp ligger, uansett hvem som kjoerer installasjonen.
+    # Ikke la feilet omp-funn stoppe configure.sh: det er bedre aa fa
+    # en installert bro + token, og gi brukeren beskjed om aa installere
+    # omp etterpaa, enn aa avbryte med exit 1.
     if SERVICE_HOME="$USER_HOME" "$INSTALL_DIR/scripts/write-omp-bin.sh" "$INSTALL_DIR"; then
         echo "  omp-bin.txt:   skrevet"
     else
         echo "  ADVARSEL: fant ingen omp for $USER_NAME. Broen kan ikke starte omp." >&2
         echo "            Installer med: npm install -g --prefix ~/.local @oh-my-pi/pi-coding-agent" >&2
+        echo "            og bun:    curl -fsSL https://bun.sh/install | bash" >&2
+        echo "            Kjoer deretter: sudo /opt/nimay-omp-bridge/scripts/configure.sh" >&2
     fi
 fi
 
@@ -137,7 +159,7 @@ if [[ "$AUTO_START" == "true" ]]; then
 fi
 
 # --- report -------------------------------------------------------------------
-IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+IP="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
 IP="${IP:-127.0.0.1}"
 echo
 echo "================ Nimay OMP Bridge installert ================"

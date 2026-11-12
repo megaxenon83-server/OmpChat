@@ -4,17 +4,21 @@
 
 ```bash
 # Fedora / RHEL 9+ / AlmaLinux / Rocky Linux
-sudo rpm -Uvh nimay-omp-bridge-1.0.0-1.noarch.rpm
-# eller
 sudo dnf install ./nimay-omp-bridge-1.0.0-1.noarch.rpm
+# eller
+sudo rpm -Uvh --nodeps nimay-omp-bridge-1.0.0-1.noarch.rpm
 ```
+
+> Bruk `dnf install ./...rpm` (anbefalt): den loeser avhengigheter som
+> `nodejs >= 18` automatisk. `rpm -Uvh` alone feiler hvis Node.js ikke
+> er installert fra for.
 
 Dette:
 1. Installerer bridge til `/opt/nimay-omp-bridge`
 2. Genererer unik token i `/opt/nimay-omp-bridge/token`
-2. Oppretter og aktiverer systemd-tjeneste `nimay-omp-bridge`
-3. Starter tjenesten umiddelbart
-4. Aktiverer autostart ved boot (`systemctl enable`)
+3. Oppretter og aktiverer systemd-tjeneste `nimay-omp-bridge`
+4. Starter tjenesten umiddelbart
+5. Aktiverer autostart ved boot (`systemctl enable`)
 
 ---
 
@@ -152,10 +156,12 @@ systemctl daemon-reload
 
 | Problem | Løsning |
 |---------|---------|
+| `rpm -Uvh` sier "nodejs >= 18 is needed" | Bruk `sudo dnf install ./nimay-omp-bridge-1.0.0-1.noarch.rpm` i stedet - den loeser avhengigheten automatisk. |
 | Tjeneste starter ikke | `journalctl -u nimay-omp-bridge -f` |
 | Port 7802 allerede i bruk | `ss -tlnp | grep 7802` → stopp prosessen |
 | Ingen token i config | `cat /opt/nimay-omp-bridge/token` |
 | Tjeneste starter ikke ved boot | `systemctl enable --now nimay-omp-bridge` |
+| Broen svarer, men kan ikke starte omp | Installer omp: `npm install -g --prefix ~/.local @oh-my-pi/pi-coding-agent` og bun: `curl -fsSL https://bun.sh/install | bash`, deretter kjør `sudo /opt/nimay-omp-bridge/scripts/configure.sh` på nytt. |
 | rpm-ostree: "package already installed" | `rpm-ostree uninstall nimay-omp-bridge` først |
 
 ---
